@@ -1,0 +1,115 @@
+/* ===========================================================================
+   Waterline — desktop widget
+   Reuses the app's theme tokens + SVG paint classes from styles.css.
+   Transparent window: the rounded card floats on the desktop.
+   =========================================================================== */
+
+body.widget {
+  background: transparent;
+  padding: 12px;
+  overflow: hidden;
+}
+
+.w-card {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  box-shadow: 0 10px 26px rgba(0, 0, 0, 0.34);
+  padding: 8px 12px 12px;
+  overflow: hidden;
+}
+:root[data-theme='light'] .w-card { box-shadow: 0 8px 20px rgba(15, 46, 51, 0.16); }
+
+/* drag strip */
+.w-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 26px;
+  cursor: grab;
+}
+.w-top:active { cursor: grabbing; }
+.w-brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 11px;
+  color: var(--text-2);
+  letter-spacing: 0.02em;
+}
+.w-brand svg { width: 12px; height: 12px; color: var(--accent); }
+.w-ghost {
+  width: 24px;
+  height: 24px;
+  border-radius: 7px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-3);
+  transition: color 0.15s, background 0.15s;
+}
+.w-ghost svg { width: 14px; height: 14px; }
+.w-ghost:hover { color: var(--accent); background: var(--surface-sunken); }
+
+/* middle: bottle + numbers */
+.w-mid { flex: 1; display: flex; align-items: center; gap: 12px; min-height: 0; }
+.w-bottle-wrap { display: flex; flex: none; }
+.w-bottle { width: 58px; height: auto; }
+
+/* the bottle renders at 58px, so strokes tuned for 132px need thickening */
+.w-bottle .ticks line { stroke-width: 2.5; }
+.w-bottle .empty-hint { stroke-width: 3; stroke-dasharray: 7 9; }
+.w-bottle .wave-crest { stroke-width: 3; }
+.w-bottle.over-goal .wave-crest { stroke-width: 4.5; }
+
+.w-stats { min-width: 0; }
+.w-num {
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: 32px;
+  line-height: 1;
+  letter-spacing: -0.01em;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+.w-unit { font-family: var(--font-mono); font-size: 11px; color: var(--text-2); margin-top: 3px; }
+.w-pct {
+  display: inline-block;
+  margin-top: 9px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--accent);
+  background: var(--accent-tint);
+  border-radius: 999px;
+  padding: 2px 9px;
+}
+.w-pct.hit {
+  color: var(--success);
+  background: color-mix(in srgb, var(--success) 14%, transparent);
+}
+
+/* icon actions */
+.w-actions { display: flex; gap: 8px; margin-top: 8px; }
+.w-btn {
+  flex: 1;
+  height: 38px;
+  border-radius: 11px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: transform 0.09s ease-out, background 0.18s var(--ease);
+}
+.w-btn:active { transform: scale(0.96); }
+.w-btn svg { width: 20px; height: 20px; }
+.w-btn-primary { background: var(--accent); color: var(--on-accent); }
+.w-btn-primary:hover { background: var(--accent-pressed); }
+.w-btn-tonal { background: var(--accent-tint); color: var(--accent); }
+.w-btn-tonal:hover { background: color-mix(in srgb, var(--accent) 22%, transparent); }
+
+/* the widget never scrolls */
+.w-bottle { flex: none; }

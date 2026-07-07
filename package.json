@@ -1,0 +1,39 @@
+{
+  "name": "waterline",
+  "productName": "Waterline",
+  "version": "1.0.0",
+  "description": "A calm desktop water-drinking reminder and daily hydration tracker, built with Electron.",
+  "main": "src/main.js",
+  "scripts": {
+    "start": "electron .",
+    "make-icons": "node build/make-icons.js",
+    "fetch-fonts": "node build/fetch-fonts.js",
+    "assets": "node build/make-icons.js && node build/fetch-fonts.js",
+    "postinstall": "node build/make-icons.js && node build/fetch-fonts.js",
+    "pack": "electron-builder --dir",
+    "dist": "electron-builder"
+  },
+  "keywords": [
+    "water",
+    "hydration",
+    "reminder",
+    "tracker",
+    "electron",
+    "desktop-app",
+    "windows"
+  ],
+  "author": "Muhammed Kaamil",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/bhairavi-ndev/waterline.git"
+  },
+  "homepage": "https://github.com/bhairavi-ndev/waterline#readme",
+  "bugs": {
+    "url": "https://github.com/bhairavi-ndev/waterline/issues"
+  },
+  "devDependencies": {
+    "electron": "^43.0.0",
+    "electron-builder": "^26.15.3"
+  }
+}

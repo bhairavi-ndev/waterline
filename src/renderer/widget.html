@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta
+    http-equiv="Content-Security-Policy"
+    content="default-src 'none'; img-src 'self' data:; style-src 'self'; font-src 'self'; script-src 'self'; connect-src 'self';"
+  />
+  <title>Waterline widget</title>
+  <link rel="stylesheet" href="../../assets/fonts/fonts.css" />
+  <link rel="stylesheet" href="styles.css" />
+  <link rel="stylesheet" href="widget.css" />
+</head>
+<body class="widget">
+  <div class="w-card" id="card">
+    <!-- drag strip -->
+    <div class="w-top" id="dragStrip">
+      <span class="w-brand">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2.5C12 2.5 5 10 5 15a7 7 0 0 0 14 0c0-5-7-12.5-7-12.5Z" fill="currentColor"/></svg>
+        Waterline
+      </span>
+      <button class="w-ghost" id="expandBtn" title="Open Waterline" aria-label="Open Waterline">
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M14 4h6v6M20 4l-7 7M10 20H4v-6M4 20l7-7" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+      </button>
+    </div>
+
+    <div class="w-mid">
+      <div class="w-bottle-wrap">
+        <svg class="bottle w-bottle" viewBox="0 0 140 300" aria-hidden="true">
+          <defs>
+            <linearGradient id="waterGrad" gradientUnits="userSpaceOnUse" x1="0" y1="288" x2="0" y2="68">
+              <stop offset="0" class="wg-deep" />
+              <stop offset="0.55" class="wg-mid" />
+              <stop offset="1" class="wg-surface" />
+            </linearGradient>
+            <clipPath id="bottleClip">
+              <path d="M27,68 L113,68 L113,273 Q113,288 98,288 L42,288 Q27,288 27,273 Z" />
+            </clipPath>
+          </defs>
+          <g clip-path="url(#bottleClip)">
+            <rect class="bottle-bg" x="27" y="68" width="86" height="220" />
+            <g id="waterGroup" class="water-group">
+              <rect id="waterBody" x="-140" y="68" width="420" height="300" fill="url(#waterGrad)" />
+              <path id="waveFill" class="wave wave-fill" opacity="0.55" />
+              <path id="waveCrest" class="wave wave-crest" fill="none" stroke-width="2" />
+            </g>
+          </g>
+          <!-- unlabeled quarter graduations (submerged state set by widget.js) -->
+          <g class="ticks" id="wTicks">
+            <g class="tick" data-frac="0.25"><line x1="92" y1="233" x2="108" y2="233" /></g>
+            <g class="tick" data-frac="0.5"><line x1="92" y1="178" x2="108" y2="178" /></g>
+            <g class="tick" data-frac="0.75"><line x1="92" y1="123" x2="108" y2="123" /></g>
+            <g class="tick" data-frac="1"><line x1="92" y1="68" x2="108" y2="68" /></g>
+          </g>
+          <!-- empty-state dotted inner hint (same as the main app's hero bottle) -->
+          <path class="empty-hint"
+                d="M31,72 L109,72 L109,271 Q109,284 96,284 L44,284 Q31,284 31,271 Z"
+                fill="none" />
+          <path class="bottle-outline"
+                d="M57,6 L83,6 Q86,6 86,9 L86,24 L86,38 Q86,41 89,43 Q114,59 114,74 L114,273 Q114,290 97,290 L43,290 Q26,290 26,273 L26,74 Q26,59 51,43 Q54,41 54,38 L54,24 L54,9 Q54,6 57,6 Z"
+                fill="none" stroke-width="2.5" />
+        </svg>
+      </div>
+
+      <div class="w-stats" aria-live="polite">
+        <div class="w-num" id="wNum">0</div>
+        <div class="w-unit">/ <span id="wGoal">2,750</span> ml</div>
+        <div class="w-pct" id="wPct">0%</div>
+      </div>
+    </div>
+
+    <div class="w-actions">
+      <button class="w-btn w-btn-primary" id="wFull" title="Log full bottle" aria-label="Log full bottle">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 2h6M10 2v2.5c0 .8-.3 1.2-.8 1.9C8.4 7.6 8 8.6 8 10v10a2 2 0 0 0 2 2h4a2 2 0 0 0 2-2V10c0-1.4-.4-2.4-1.2-3.6-.5-.7-.8-1.1-.8-1.9V2" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><path d="M8.2 9.5h7.6V20a2 2 0 0 1-2 2h-3.6a2 2 0 0 1-2-2Z" fill="currentColor" opacity="0.85"/></svg>
+      </button>
+      <button class="w-btn w-btn-tonal" id="wHalf" title="Log half bottle" aria-label="Log half bottle">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 2h6M10 2v2.5c0 .8-.3 1.2-.8 1.9C8.4 7.6 8 8.6 8 10v10a2 2 0 0 0 2 2h4a2 2 0 0 0 2-2V10c0-1.4-.4-2.4-1.2-3.6-.5-.7-.8-1.1-.8-1.9V2" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><path d="M8.2 15h7.6V20a2 2 0 0 1-2 2h-3.6a2 2 0 0 1-2-2Z" fill="currentColor" opacity="0.85"/></svg>
+      </button>
+    </div>
+  </div>
+
+  <script src="widget.js"></script>
+</body>
+</html>

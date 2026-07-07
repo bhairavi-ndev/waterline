@@ -1,0 +1,33 @@
+appId: com.kaamil.waterline
+productName: Waterline
+copyright: Copyright © 2026 Muhammed Kaamil
+
+directories:
+  output: dist
+  buildResources: build
+
+# Ship only what the app needs at runtime (no dev scripts, no dist).
+files:
+  - src/**/*
+  - assets/**/*
+  - package.json
+
+win:
+  target:
+    - nsis
+  icon: assets/icon.ico
+
+# Per-user assisted installer: no admin prompt; the user picks the install
+# folder and (via build/installer.nsh) ticks which shortcuts to create.
+nsis:
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+  # Shortcuts are created by the custom page in build/installer.nsh instead of
+  # unconditionally, so the user can opt out of either one.
+  createDesktopShortcut: false
+  createStartMenuShortcut: false
+  shortcutName: Waterline
+  uninstallDisplayName: Waterline
+  include: build/installer.nsh
+  artifactName: ${productName}-Setup-${version}.${ext}

@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta
+    http-equiv="Content-Security-Policy"
+    content="default-src 'none'; img-src 'self' data:; style-src 'self'; font-src 'self'; script-src 'self'; connect-src 'self';"
+  />
+  <title>Waterline</title>
+  <link rel="stylesheet" href="../../assets/fonts/fonts.css" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <!-- ── Title bar (brand + native window controls) ────────── -->
+  <header class="titlebar" id="titlebar">
+    <div class="brand">
+      <svg class="brand-mark" viewBox="0 0 24 24" aria-hidden="true">
+        <path d="M12 2.5C12 2.5 5 10 5 15a7 7 0 0 0 14 0c0-5-7-12.5-7-12.5Z"
+              fill="currentColor" />
+      </svg>
+      <span>Waterline</span>
+    </div>
+  </header>
+
+  <!-- ── Tab strip (own row so window controls can't clip it) ─ -->
+  <div class="tabbar">
+    <nav class="tabs" role="tablist" aria-label="Sections">
+      <button class="tab is-active" id="tab-today" data-tab="today" role="tab" aria-selected="true" aria-controls="view-today">Today</button>
+      <button class="tab" id="tab-history" data-tab="history" role="tab" aria-selected="false" aria-controls="view-history" tabindex="-1">History</button>
+      <button class="tab" id="tab-settings" data-tab="settings" role="tab" aria-selected="false" aria-controls="view-settings" tabindex="-1">Settings</button>
+    </nav>
+  </div>
+
+  <main class="stage">
+    <!-- ── Today ───────────────────────────────────────────── -->
+    <section id="view-today" class="view is-active" role="tabpanel" aria-labelledby="tab-today">
+      <div class="hero">
+        <div class="bottle-wrap">
+          <svg class="bottle" viewBox="0 0 140 300" aria-hidden="true">
+            <defs>
+              <linearGradient id="waterGrad" gradientUnits="userSpaceOnUse" x1="0" y1="288" x2="0" y2="68">
+                <stop offset="0" class="wg-deep" />
+                <stop offset="0.55" class="wg-mid" />
+                <stop offset="1" class="wg-surface" />
+              </linearGradient>
+              <clipPath id="bottleClip">
+                <path d="M27,68 L113,68 L113,273 Q113,288 98,288 L42,288 Q27,288 27,273 Z" />
+              </clipPath>
+            </defs>
+
+            <!-- interior fill (clipped) -->
+            <g clip-path="url(#bottleClip)">
+              <rect class="bottle-bg" x="27" y="68" width="86" height="220" />
+              <g id="waterGroup" class="water-group">
+                <rect id="waterBody" x="-140" y="68" width="420" height="300" fill="url(#waterGrad)" />
+                <path id="waveFill" class="wave wave-fill" opacity="0.55" />
+                <path id="waveCrest" class="wave wave-crest" fill="none" stroke-width="2" />
+                <g id="bubbles"></g>
+              </g>
+            </g>
+
+            <!-- graduation ticks (over the water) -->
+            <g id="ticks" class="ticks"></g>
+
+            <!-- empty-state dotted inner hint -->
+            <path id="emptyHint" class="empty-hint"
+                  d="M31,72 L109,72 L109,271 Q109,284 96,284 L44,284 Q31,284 31,271 Z"
+                  fill="none" />
+
+            <!-- bottle outline -->
+            <path class="bottle-outline"
+                  d="M57,6 L83,6 Q86,6 86,9 L86,24 L86,38 Q86,41 89,43 Q114,59 114,74 L114,273 Q114,290 97,290 L43,290 Q26,290 26,273 L26,74 Q26,59 51,43 Q54,41 54,38 L54,24 L54,9 Q54,6 57,6 Z"
+                  fill="none" stroke-width="2.5" />
+          </svg>
+        </div>
+
+        <div class="hero-readout">
+          <div class="readout" aria-live="polite">
+            <span id="readoutNum" class="readout-num">0</span>
+            <span class="readout-unit">/ <span id="goalNum">2,750</span> ml</span>
+          </div>
+          <div id="celebrate" class="celebrate" aria-live="polite" hidden>
+            <div class="celebrate-title">Goal reached</div>
+            <div class="celebrate-sub" id="celebrateSub">2,750 ml — every cell thanks you.</div>
+          </div>
+          <div class="chips">
+            <span class="chip" id="chipPct">0% · 2,750 ml to go</span>
+            <span class="chip" id="chipBottles">~4 bottles left</span>
+          </div>
+          <p class="encourage" id="encourage">Nothing logged yet. First sip of the day?</p>
+        </div>
+      </div>
+
+      <div class="quick-add">
+        <button class="btn btn-primary" id="addFull" title="Log full bottle · 700 ml" aria-label="Log full bottle · 700 ml">
+          <svg class="btn-ic" viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M9 2h6M10 2v2.5c0 .8-.3 1.2-.8 1.9C8.4 7.6 8 8.6 8 10v10a2 2 0 0 0 2 2h4a2 2 0 0 0 2-2V10c0-1.4-.4-2.4-1.2-3.6-.5-.7-.8-1.1-.8-1.9V2" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/>
+            <path d="M8.2 9.5h7.6V20a2 2 0 0 1-2 2h-3.6a2 2 0 0 1-2-2Z" fill="currentColor" opacity="0.85"/>
+          </svg>
+          <span class="btn-ml"><span id="fullLbl">700</span> ml</span>
+        </button>
+        <div class="quick-row">
+          <button class="btn btn-tonal" id="addHalf" title="Log half bottle · 350 ml" aria-label="Log half bottle · 350 ml">
+            <svg class="btn-ic" viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M9 2h6M10 2v2.5c0 .8-.3 1.2-.8 1.9C8.4 7.6 8 8.6 8 10v10a2 2 0 0 0 2 2h4a2 2 0 0 0 2-2V10c0-1.4-.4-2.4-1.2-3.6-.5-.7-.8-1.1-.8-1.9V2" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/>
+              <path d="M8.2 15h7.6V20a2 2 0 0 1-2 2h-3.6a2 2 0 0 1-2-2Z" fill="currentColor" opacity="0.85"/>
+            </svg>
+            <span class="btn-ml"><span id="halfLbl">350</span> ml</span>
+          </button>
+          <div class="custom-wrap">
+            <button class="btn btn-outline" id="customBtn" title="Log a custom amount" aria-label="Log a custom amount" aria-haspopup="dialog" aria-expanded="false">
+              <svg class="btn-ic" viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M9 2h6M10 2v2.5c0 .8-.3 1.2-.8 1.9C8.4 7.6 8 8.6 8 10v10a2 2 0 0 0 2 2h4a2 2 0 0 0 2-2V10c0-1.4-.4-2.4-1.2-3.6-.5-.7-.8-1.1-.8-1.9V2" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/>
+                <path d="M8 13.5h8" fill="none" stroke="currentColor" stroke-width="1.8" stroke-dasharray="1.8 1.3"/>
+              </svg>
+              <span class="btn-ml">…</span>
+            </button>
+            <div class="popover" id="customPop" role="dialog" aria-label="Add a custom amount" hidden>
+              <label class="popover-label" for="customInput">Amount (ml)</label>
+              <input class="popover-input" id="customInput" type="number" inputmode="numeric" min="1" max="3000" step="10" placeholder="250" />
+              <div class="popover-presets">
+                <button data-ml="100">100</button>
+                <button data-ml="200">200</button>
+                <button data-ml="500">500</button>
+              </div>
+              <button class="btn btn-primary btn-sm" id="customAdd">Add</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="log">
+        <div class="eyebrow">Today's log</div>
+        <ul id="logList" class="log-list"></ul>
+        <div id="logEmpty" class="log-empty">
+          No water logged yet today.
+          <span>Tap a button above when you take a drink.</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- ── History ─────────────────────────────────────────── -->
+    <section id="view-history" class="view" role="tabpanel" aria-labelledby="tab-history">
+      <div class="hist-top">
+        <div class="segmented" id="rangeSeg" role="group" aria-label="Range">
+          <button data-range="7" class="is-active" aria-pressed="true">7 days</button>
+          <button data-range="30" aria-pressed="false">30 days</button>
+        </div>
+        <div class="hist-stats">
+          <span class="chip" id="statStreak">Streak 0d</span>
+          <span class="chip" id="statAvg">Avg 0 ml</span>
+        </div>
+      </div>
+      <div class="card chart-card">
+        <div id="chartHost" class="chart-host"></div>
+      </div>
+      <ul id="dayList" class="day-list"></ul>
+      <div id="histEmpty" class="hist-empty" hidden>History fills up as you drink. Check back tomorrow.</div>
+    </section>
+
+    <!-- ── Settings ────────────────────────────────────────── -->
+    <section id="view-settings" class="view" role="tabpanel" aria-labelledby="tab-settings">
+      <div class="card set-card">
+        <div class="eyebrow">Hydration</div>
+        <div class="set-row">
+          <div class="set-label">Daily goal</div>
+          <div class="stepper" data-key="dailyGoalMl" data-step="100" data-min="500" data-max="6000">
+            <button class="stepper-btn" data-dir="-1" title="Decrease daily goal" aria-label="Decrease daily goal">−</button>
+            <span class="stepper-field">
+              <input class="stepper-val" id="valGoal" type="text" inputmode="numeric" maxlength="5" aria-label="Daily goal, millilitres" />
+              <span class="stepper-unit">ml</span>
+            </span>
+            <button class="stepper-btn" data-dir="1" title="Increase daily goal" aria-label="Increase daily goal">＋</button>
+          </div>
+        </div>
+        <div class="set-row">
+          <div class="set-label">Bottle size</div>
+          <div class="stepper" data-key="bottleMl" data-step="50" data-min="100" data-max="3000">
+            <button class="stepper-btn" data-dir="-1" title="Decrease bottle size" aria-label="Decrease bottle size">−</button>
+            <span class="stepper-field">
+              <input class="stepper-val" id="valBottle" type="text" inputmode="numeric" maxlength="4" aria-label="Bottle size, millilitres" />
+              <span class="stepper-unit">ml</span>
+            </span>
+            <button class="stepper-btn" data-dir="1" title="Increase bottle size" aria-label="Increase bottle size">＋</button>
+          </div>
+        </div>
+        <p class="set-caption" id="capBottles">That's about 4 bottles a day.</p>
+      </div>
+
+      <div class="card set-card">
+        <div class="eyebrow">Reminders</div>
+        <div class="set-row">
+          <div class="set-label">Remind me to drink</div>
+          <button class="switch" id="swReminders" role="switch" aria-checked="true" aria-label="Remind me to drink"><span class="switch-thumb"></span></button>
+        </div>
+        <div class="set-row" id="rowInterval">
+          <div class="set-label">Every</div>
+          <select class="select" id="selInterval" aria-label="Reminder interval">
+            <option value="30">30 min</option>
+            <option value="45">45 min</option>
+            <option value="60">60 min</option>
+            <option value="90">90 min</option>
+            <option value="120">120 min</option>
+          </select>
+        </div>
+        <div class="set-row" id="rowQuiet">
+          <div class="set-label">Quiet hours</div>
+          <div class="time-range">
+            <input class="time" id="quietStart" type="time" value="22:00" aria-label="Quiet hours start" />
+            <span class="dash">–</span>
+            <input class="time" id="quietEnd" type="time" value="08:00" aria-label="Quiet hours end" />
+          </div>
+        </div>
+        <p class="set-caption">No reminders during quiet hours.</p>
+      </div>
+
+      <div class="card set-card">
+        <div class="eyebrow">App</div>
+        <div class="set-row">
+          <div class="set-label">Theme</div>
+          <div class="segmented" id="themeSeg" role="group" aria-label="Theme">
+            <button data-val="light" aria-pressed="false">Light</button>
+            <button data-val="dark" aria-pressed="false">Dark</button>
+            <button data-val="system" aria-pressed="false">System</button>
+          </div>
+        </div>
+        <div class="set-row">
+          <div class="set-label">Desktop widget</div>
+          <button class="switch" id="swWidget" role="switch" aria-checked="false" aria-label="Show desktop widget"><span class="switch-thumb"></span></button>
+        </div>
+        <div class="set-row">
+          <div class="set-label">Launch at startup</div>
+          <button class="switch" id="swStartup" role="switch" aria-checked="false" aria-label="Launch at startup"><span class="switch-thumb"></span></button>
+        </div>
+        <div class="set-row">
+          <div class="set-label">Keep running in tray when closed</div>
+          <button class="switch" id="swTray" role="switch" aria-checked="true" aria-label="Keep running in tray when closed"><span class="switch-thumb"></span></button>
+        </div>
+      </div>
+      <div class="set-foot">Waterline · v1.0</div>
+    </section>
+  </main>
+
+  <!-- Undo toast -->
+  <div id="toast" class="toast" role="status" hidden>
+    <span id="toastMsg">Logged 700 ml</span>
+    <button id="toastUndo">Undo</button>
+  </div>
+
+  <!-- Chart tooltip -->
+  <div id="chartTip" class="chart-tip" hidden></div>
+
+  <script src="renderer.js"></script>
+</body>
+</html>
