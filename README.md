@@ -86,4 +86,4 @@ Bundled fonts (SIL Open Font License):
 
 ## License
 
-[MIT](LICENSE) © Muhammed Kaamil
+[MIT](LICENSE) © bhairavi-ndev
