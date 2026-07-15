@@ -158,7 +158,7 @@ class Store {
    */
   addWater(ml, kind = 'custom', opts = {}) {
     const amount = clampMl(ml);
-    const k = ['bottle', 'half', 'custom'].includes(kind) ? kind : 'custom';
+    const k = ['bottle', 'half', 'glass', 'custom'].includes(kind) ? kind : 'custom';
     const key = opts.dateKey || dateKey();
     if (isFutureKey(key)) throw new RangeError('cannot log water for a future date');
     const day = this.ensureDay(key);
