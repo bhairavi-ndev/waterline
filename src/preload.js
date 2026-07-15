@@ -15,6 +15,7 @@ contextBridge.exposeInMainWorld('hydrate', {
   getDay: (dateKey) => ipcRenderer.invoke('day:get', dateKey),
   updateSettings: (partial) => ipcRenderer.invoke('settings:update', partial),
   getHistory: (nDays) => ipcRenderer.invoke('history:get', nDays),
+  exportReport: (format, range) => ipcRenderer.invoke('export:run', { format, range }),
 
   // Widget-only controls (no-ops from the main window).
   openApp: () => ipcRenderer.invoke('app:show'),

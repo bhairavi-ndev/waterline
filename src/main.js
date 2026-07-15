@@ -7,14 +7,17 @@ const {
   Notification,
   Tray,
   Menu,
+  dialog,
   nativeImage,
   nativeTheme,
   powerMonitor,
   screen,
 } = require('electron');
 const path = require('path');
+const fs = require('fs');
 const { Store, dateKey } = require('./store');
 const { createReminderScheduler } = require('./reminders');
+const report = require('./report');
 
 const APP_ID = 'com.kaamil.waterline';
 const APP_NAME = 'Waterline';
@@ -25,7 +28,7 @@ const ASSETS = path.join(__dirname, '..', 'assets');
 // settings file directly here rather than waiting for the Store.
 try {
   const udBase = process.env.WATERLINE_USERDATA || app.getPath('userData');
-  const saved = JSON.parse(require('fs').readFileSync(path.join(udBase, 'waterline.json'), 'utf8'));
+  const saved = JSON.parse(fs.readFileSync(path.join(udBase, 'waterline.json'), 'utf8'));
   if (saved && saved.settings && saved.settings.lowPowerMode) app.disableHardwareAcceleration();
 } catch (_) {
   /* no saved settings yet -> default (GPU on) */
@@ -134,6 +137,10 @@ function createWindow() {
         await mainWindow.webContents.executeJavaScript("document.querySelector('[data-tab=settings]').click()");
         await wait(500);
         await shot('settings');
+        // scroll to the new Low-power + Data controls at the bottom of Settings
+        await mainWindow.webContents.executeJavaScript("document.querySelector('.set-foot').scrollIntoView({ block: 'end' })");
+        await wait(300);
+        await shot('settings-bottom');
         // custom-amount popover opens (regression guard)
         await mainWindow.webContents.executeJavaScript("document.querySelector('[data-tab=today]').click()");
         await wait(400);
@@ -576,6 +583,68 @@ function registerIpc() {
   });
 
   ipcMain.handle('history:get', (_e, nDays) => store.getHistory(nDays || 30));
+
+  ipcMain.handle('export:run', (e, payload) => runExport(e, payload || {}));
+}
+
+// ---------------------------------------------------------------------------
+// Export (CSV / JSON / printable PDF)
+// ---------------------------------------------------------------------------
+function rangeStartKey(range, state, toKey) {
+  if (range === 'all') return report.earliestKey(state);
+  const n = range === '7' ? 6 : 29;
+  const [y, m, d] = toKey.split('-').map(Number);
+  return report.keyOf(new Date(y, m - 1, d - n));
+}
+function rangeLabel(range) {
+  return range === 'all' ? 'All time' : range === '7' ? 'Last 7 days' : 'Last 30 days';
+}
+function exportFileMeta(format, toKey) {
+  if (format === 'csv') return { defaultPath: `waterline-${toKey}.csv`, filters: [{ name: 'CSV', extensions: ['csv'] }] };
+  if (format === 'json') return { defaultPath: `waterline-backup-${toKey}.json`, filters: [{ name: 'JSON', extensions: ['json'] }] };
+  return { defaultPath: `waterline-report-${toKey}.pdf`, filters: [{ name: 'PDF', extensions: ['pdf'] }] };
+}
+
+/** Render report HTML to PDF via a hidden window + printToPDF. */
+async function renderPdf(html) {
+  const tmp = path.join(app.getPath('temp'), `waterline-report-${Date.now()}.html`);
+  fs.writeFileSync(tmp, html, 'utf8');
+  const win = new BrowserWindow({ show: false, webPreferences: { sandbox: true, contextIsolation: true } });
+  try {
+    await win.loadFile(tmp);
+    return await win.webContents.printToPDF({ printBackground: true });
+  } finally {
+    win.destroy();
+    try { fs.unlinkSync(tmp); } catch (_) { /* best effort */ }
+  }
+}
+
+async function runExport(e, { format = 'pdf', range = 'all' }) {
+  const state = store.getState();
+  const toKey = dateKey();
+  const fromKey = rangeStartKey(range, state, toKey);
+  const meta = exportFileMeta(format, toKey);
+  const host = BrowserWindow.fromWebContents(e.sender) || mainWindow;
+  const { canceled, filePath } = await dialog.showSaveDialog(host, {
+    title: 'Export Waterline data',
+    defaultPath: meta.defaultPath,
+    filters: meta.filters,
+  });
+  if (canceled || !filePath) return { ok: false, canceled: true };
+  try {
+    if (format === 'csv') {
+      fs.writeFileSync(filePath, report.toCSV(report.collectRange(state, fromKey, toKey).days), 'utf8');
+    } else if (format === 'json') {
+      fs.writeFileSync(filePath, report.toJSON(state), 'utf8');
+    } else {
+      const { days, stats } = report.collectRange(state, fromKey, toKey);
+      const html = report.toHTML({ days, stats, rangeLabel: rangeLabel(range), generatedAt: new Date().toLocaleString() });
+      fs.writeFileSync(filePath, await renderPdf(html));
+    }
+    return { ok: true, filePath };
+  } catch (err) {
+    return { ok: false, error: String((err && err.message) || err) };
+  }
 }
 
 function broadcastTheme() {

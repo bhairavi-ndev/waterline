@@ -91,6 +91,10 @@
     swTray: $('swTray'),
     swWidget: $('swWidget'),
     swLowPower: $('swLowPower'),
+    exportRange: $('exportRange'),
+    exportPdf: $('exportPdf'),
+    exportCsv: $('exportCsv'),
+    exportJson: $('exportJson'),
     customPop: $('customPop'),
     customBtn: $('customBtn'),
     customInput: $('customInput'),
@@ -486,12 +490,25 @@
     applyDay(day, { animate: true });
   }
 
-  function showToast(msg) {
+  function showToast(msg, withUndo = true) {
     el.toastMsg.textContent = msg;
+    el.toastUndo.hidden = !withUndo;
     el.toast.hidden = false;
     requestAnimationFrame(() => el.toast.classList.add('show'));
     clearTimeout(toastTimer);
     toastTimer = setTimeout(hideToast, 6000);
+  }
+
+  async function runExport(format) {
+    const range = el.exportRange.value;
+    let res;
+    try {
+      res = await api.exportReport(format, range);
+    } catch (_) {
+      res = { ok: false };
+    }
+    if (res && res.ok) showToast(`Exported ${format === 'pdf' ? 'PDF report' : format.toUpperCase()}`, false);
+    else if (!res || !res.canceled) showToast('Export failed', false);
   }
   function hideToast() {
     el.toast.classList.remove('show');
@@ -924,6 +941,9 @@
     el.swLowPower.addEventListener('click', () =>
       updateSettings({ lowPowerMode: el.swLowPower.getAttribute('aria-checked') !== 'true' })
     );
+    el.exportPdf.addEventListener('click', () => runExport('pdf'));
+    el.exportCsv.addEventListener('click', () => runExport('csv'));
+    el.exportJson.addEventListener('click', () => runExport('json'));
     el.selInterval.addEventListener('change', () =>
       updateSettings({ reminderIntervalMin: Number(el.selInterval.value) })
     );

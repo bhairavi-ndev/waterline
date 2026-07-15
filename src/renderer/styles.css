@@ -295,6 +295,8 @@ button { font-family: inherit; color: inherit; cursor: pointer; border: none; ba
 .btn-outline { border: 1px solid var(--border); color: var(--text); flex: 1; background: var(--surface); }
 .btn-outline:hover { border-color: var(--accent); }
 .btn-sm { height: 38px; font-size: 13px; }
+.export-actions { display: flex; gap: 8px; margin-top: 8px; }
+.export-actions .btn { flex: 1; padding: 0 6px; }
 
 .custom-wrap { position: relative; flex: 1; display: flex; }
 .popover {

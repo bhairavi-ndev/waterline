@@ -281,6 +281,25 @@
         </div>
         <p class="set-caption">Fewer animations and no GPU acceleration. Restart to fully apply.</p>
       </div>
+
+      <div class="card set-card">
+        <div class="eyebrow">Data</div>
+        <div class="set-row">
+          <div class="set-label">Range</div>
+          <select class="select" id="exportRange" aria-label="Export range">
+            <option value="all">All time</option>
+            <option value="30">Last 30 days</option>
+            <option value="7">Last 7 days</option>
+          </select>
+        </div>
+        <div class="export-actions">
+          <button class="btn btn-tonal btn-sm" id="exportPdf">Report (PDF)</button>
+          <button class="btn btn-tonal btn-sm" id="exportCsv">CSV</button>
+          <button class="btn btn-tonal btn-sm" id="exportJson">JSON backup</button>
+        </div>
+        <p class="set-caption">Export your hydration data to share, print, or back up.</p>
+      </div>
+
       <div class="set-foot">Waterline · v1.1</div>
     </section>
   </main>
