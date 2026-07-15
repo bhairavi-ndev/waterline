@@ -87,8 +87,23 @@
             <span class="chip" id="chipPct">0% · 2,750 ml to go</span>
             <span class="chip" id="chipBottles">~4 bottles left</span>
           </div>
+          <p class="pace-status" id="paceStatus" aria-live="polite" hidden>
+            <span class="pace-main" id="paceMain"></span>
+            <span class="pace-sub" id="paceSub"></span>
+          </p>
           <p class="encourage" id="encourage">Nothing logged yet. First sip of the day?</p>
         </div>
+      </div>
+
+      <div class="card pace-card" id="paceCard" hidden>
+        <div class="pace-card-head">
+          <span class="eyebrow">Pace today</span>
+          <span class="pace-legend">
+            <span class="pace-legend-item pl-expected">Expected</span>
+            <span class="pace-legend-item pl-actual">You</span>
+          </span>
+        </div>
+        <div class="pace-host" id="paceHost"></div>
       </div>
 
       <div class="quick-add">
@@ -279,6 +294,7 @@
   <!-- Chart tooltip -->
   <div id="chartTip" class="chart-tip" hidden></div>
 
+  <script src="pace.js"></script>
   <script src="renderer.js"></script>
 </body>
 </html>

@@ -28,6 +28,7 @@
   let toastTimer = null;
   let hadGoalBadge = false;
   let editingKey = null; // date key currently open in the History day editor
+  let paceTimer = null;  // 60s tick while focused + Today active
 
   // ---- dom -----------------------------------------------------------------
   const $ = (id) => document.getElementById(id);
@@ -46,6 +47,11 @@
     chips: document.querySelector('.chips'),
     chipPct: $('chipPct'),
     chipBottles: $('chipBottles'),
+    paceStatus: $('paceStatus'),
+    paceMain: $('paceMain'),
+    paceSub: $('paceSub'),
+    paceCard: $('paceCard'),
+    paceHost: $('paceHost'),
     encourage: $('encourage'),
     fullLbl: $('fullLbl'),
     halfLbl: $('halfLbl'),
@@ -296,6 +302,7 @@
     hadGoalBadge = hitToday;
 
     renderLog();
+    renderPace();
   }
 
   function renderLog() {
@@ -323,6 +330,131 @@
       rm.addEventListener('click', () => removeEntry(e.id));
       li.append(time, ml, kind, rm);
       el.logList.appendChild(li);
+    }
+  }
+
+  // ---- pace (hydration debt) -----------------------------------------------
+  function nowMinutes() {
+    const d = new Date();
+    return d.getHours() * 60 + d.getMinutes();
+  }
+  function hourLabel(min) {
+    let h = Math.round(min / 60) % 24;
+    const ap = h < 12 ? 'a' : 'p';
+    h %= 12;
+    if (h === 0) h = 12;
+    return `${h}${ap}`;
+  }
+
+  function entryMin(e) {
+    const d = new Date(e.ts);
+    return d.getHours() * 60 + d.getMinutes();
+  }
+
+  function renderPace() {
+    if (!settings || !today) return;
+    const goal = today.goalMl || settings.dailyGoalMl;
+    const win = Pace.awakeWindow(settings);
+    const nowMin = nowMinutes();
+    // Debt is intake *by now*: entries timestamped later than now (rare — only
+    // via backfilling today) don't count toward how far along you should be.
+    const entries = today.entries.slice().sort((a, b) => new Date(a.ts) - new Date(b.ts));
+    const actualByNow = entries.reduce((sum, e) => sum + (entryMin(e) <= nowMin ? e.ml : 0), 0);
+    const st = Pace.paceStatus({ nowMin, goal, actualMl: actualByNow, win });
+
+    el.paceStatus.hidden = false;
+    el.paceCard.hidden = false;
+    el.paceStatus.classList.remove('is-behind', 'is-ahead', 'is-ontrack');
+    if (st.state === 'behind') {
+      el.paceStatus.classList.add('is-behind');
+      el.paceMain.textContent = `Behind by ${fmt(st.debtMl)} ml`;
+      el.paceSub.textContent = `expected ~${fmt(st.expectedMl)} ml by now`;
+    } else if (st.state === 'ahead') {
+      el.paceStatus.classList.add('is-ahead');
+      el.paceMain.textContent = `Ahead by ${fmt(st.surplusMl)} ml`;
+      el.paceSub.textContent = st.expectedMl > 0 ? `expected ~${fmt(st.expectedMl)} ml by now` : 'ahead of the day’s pace';
+    } else {
+      el.paceStatus.classList.add('is-ontrack');
+      el.paceMain.textContent = 'On track';
+      el.paceSub.textContent = st.expectedMl > 0 ? `expected ~${fmt(st.expectedMl)} ml by now` : 'the day is just getting started';
+    }
+
+    drawPaceChart(win, goal, nowMin, entries);
+  }
+
+  function drawPaceChart(win, goal, nowMin, entries) {
+    const host = el.paceHost;
+    host.textContent = '';
+    const W = host.clientWidth || 340;
+    const H = 96;
+    const padT = 10, padB = 16, padL = 6, padR = 6;
+    const plotW = W - padL - padR;
+    const plotH = H - padT - padB;
+    const x0 = win.startMin, x1 = win.endMin;
+    const nowClamped = Math.max(x0, nowMin); // don't draw left of wake
+    const spanX = Math.max(1, x1 - x0);
+    const maxY = goal * 1.05 || 1;
+    const X = (min) => padL + ((clamp(min, x0, x1) - x0) / spanX) * plotW;
+    const Y = (ml) => padT + plotH - (clamp(ml, 0, maxY) / maxY) * plotH;
+
+    const s = svg('svg', { viewBox: `0 0 ${W} ${H}` });
+
+    // baseline
+    s.appendChild(svg('line', { x1: padL, y1: Y(0), x2: W - padR, y2: Y(0), class: 'pace-axis' }));
+
+    // expected line: (wake, 0) -> (bed, goal)
+    s.appendChild(svg('line', {
+      x1: X(x0), y1: Y(0), x2: X(x1), y2: Y(goal),
+      class: 'pace-expected', 'stroke-dasharray': '4 3',
+    }));
+
+    // actual cumulative step-line, only up to now (a monotonic "so far" line)
+    let cum = 0;
+    const pts = [{ min: x0, ml: 0 }];
+    for (const e of entries) {
+      const m = entryMin(e);
+      if (m > nowMin) break; // entries sorted asc; ignore future-timed ones
+      pts.push({ min: m, ml: cum });
+      cum += e.ml;
+      pts.push({ min: m, ml: cum });
+    }
+    pts.push({ min: nowClamped, ml: cum }); // extend flat to now
+
+    // gap connector at "now": actual -> expected, colored by state
+    const expNow = Pace.expectedMl(nowMin, goal, win);
+    s.appendChild(svg('line', {
+      x1: X(nowClamped), y1: Y(cum), x2: X(nowClamped), y2: Y(expNow),
+      class: 'pace-gap ' + (cum < expNow ? 'is-behind' : 'is-ahead'),
+    }));
+
+    let d = '';
+    pts.forEach((p, i) => { d += (i === 0 ? 'M' : 'L') + X(p.min).toFixed(1) + ',' + Y(p.ml).toFixed(1) + ' '; });
+    s.appendChild(svg('path', { d: d.trim(), class: 'pace-actual', fill: 'none' }));
+
+    // now dot
+    s.appendChild(svg('circle', { cx: X(nowClamped), cy: Y(cum), r: 3.2, class: 'pace-now' }));
+
+    // x-axis endpoints
+    const lx = svg('text', { x: padL, y: H - 4, 'text-anchor': 'start', class: 'chart-num', 'font-size': 9 });
+    lx.textContent = hourLabel(x0);
+    const rx = svg('text', { x: W - padR, y: H - 4, 'text-anchor': 'end', class: 'chart-num', 'font-size': 9 });
+    rx.textContent = hourLabel(x1);
+    s.append(lx, rx);
+
+    host.appendChild(s);
+  }
+
+  function todayViewActive() {
+    return document.getElementById('view-today').classList.contains('is-active');
+  }
+  function syncPaceTimer() {
+    const shouldRun = !document.hidden && document.hasFocus() && todayViewActive();
+    if (shouldRun && !paceTimer) {
+      paceTimer = setInterval(renderPace, 60 * 1000);
+      renderPace();
+    } else if (!shouldRun && paceTimer) {
+      clearInterval(paceTimer);
+      paceTimer = null;
     }
   }
 
@@ -672,6 +804,7 @@
   function updateIdle() {
     const idle = document.hidden || !document.hasFocus();
     document.documentElement.classList.toggle('is-idle', idle);
+    syncPaceTimer();
   }
 
   // ---- tabs ----------------------------------------------------------------
@@ -686,6 +819,8 @@
       v.classList.toggle('is-active', v.id === `view-${name}`);
     });
     if (name === 'history') renderHistory();
+    if (name === 'today') renderPace();
+    syncPaceTimer();
   }
 
   // ---- wiring --------------------------------------------------------------
@@ -815,6 +950,7 @@
 
     window.addEventListener('resize', () => {
       if (document.getElementById('view-history').classList.contains('is-active')) renderHistory();
+      if (todayViewActive()) renderPace();
     });
 
     // Day editor (log / edit any day)
@@ -878,6 +1014,7 @@
     hadGoalBadge = today.totalMl >= (today.goalMl || settings.dailyGoalMl);
     applyDay(today, { animate: false });
     wire();
+    syncPaceTimer();
   }
 
   init();
