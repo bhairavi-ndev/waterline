@@ -250,8 +250,8 @@ button { font-family: inherit; color: inherit; cursor: pointer; border: none; ba
 .pace-status.is-ahead .pace-main,
 .pace-status.is-ontrack .pace-main { color: var(--success); }
 
-.pace-card { margin-bottom: 14px; padding-bottom: 10px; }
-.pace-card-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 4px; }
+.pace-card { padding: 14px 14px 10px; margin-bottom: 14px; }
+.pace-card-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
 .pace-card-head .eyebrow { margin-bottom: 0; }
 .pace-legend { display: inline-flex; gap: 12px; font-size: 11px; color: var(--text-3); }
 .pace-legend-item { display: inline-flex; align-items: center; gap: 5px; }
@@ -459,8 +459,8 @@ button { font-family: inherit; color: inherit; cursor: pointer; border: none; ba
 }
 .date-input:focus { outline: none; border-color: var(--accent); }
 
-.day-editor { margin: 0 0 14px; }
-.day-editor-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+.day-editor { padding: 14px; margin: 0 0 14px; }
+.day-editor-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
 .day-editor-title { font-weight: 600; font-size: 14px; }
 .day-editor-close {
   width: 26px; height: 26px; border-radius: 6px;
@@ -469,26 +469,25 @@ button { font-family: inherit; color: inherit; cursor: pointer; border: none; ba
 .day-editor-close:hover { color: var(--text); background: var(--surface-sunken); }
 
 .edit-list { list-style: none; display: flex; flex-direction: column; gap: 8px; }
-.edit-row { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 10px; }
-.edit-row-time { width: 108px; }
-.edit-row-ml, .edit-add-ml { display: inline-flex; align-items: center; gap: 6px; color: var(--text-3); font-size: 12px; }
+.edit-row, .edit-add { display: flex; align-items: center; gap: 8px; }
+.edit-row-time, .edit-add .time { width: 118px; flex: none; }
+.edit-row-ml, .edit-add-ml { flex: 1; display: flex; align-items: center; gap: 6px; color: var(--text-3); font-size: 12px; }
 .edit-row-ml input, .edit-add-ml input {
-  width: 84px; font-family: var(--font-mono); font-size: 14px; color: var(--text);
+  flex: 1; min-width: 0; font-family: var(--font-mono); font-size: 14px; color: var(--text);
   background: var(--surface-sunken); border: 1px solid var(--border);
   border-radius: var(--r-input); height: 34px; padding: 0 8px;
 }
 .edit-row-ml input:focus, .edit-add-ml input:focus { outline: none; border-color: var(--accent); }
 .edit-row-remove {
-  width: 26px; height: 26px; border-radius: 6px;
+  flex: none; width: 26px; height: 26px; border-radius: 6px;
   color: var(--text-3); font-size: 15px; line-height: 1;
 }
 .edit-row-remove:hover { color: var(--danger); background: var(--surface-sunken); }
 .edit-empty { color: var(--text-2); font-size: 13px; padding: 8px 0; }
 .edit-add {
-  display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 10px;
   margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border);
 }
-.edit-add .time { width: 108px; }
+.edit-add .btn-sm { flex: none; }
 
 /* ---- settings ---- */
 .set-card { padding: 6px 16px 16px; margin-bottom: 14px; }

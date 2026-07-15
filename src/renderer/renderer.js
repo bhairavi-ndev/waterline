@@ -57,6 +57,7 @@
     halfLbl: $('halfLbl'),
     addFull: $('addFull'),
     addHalf: $('addHalf'),
+    addGlass: $('addGlass'),
     logList: $('logList'),
     logEmpty: $('logEmpty'),
     toast: $('toast'),
@@ -104,7 +105,7 @@
   // ---- helpers -------------------------------------------------------------
   const fmt = (n) => Math.round(n).toLocaleString('en');
   const clamp = (n, lo, hi) => Math.max(lo, Math.min(hi, n));
-  const kindLabel = (k) => (k === 'bottle' ? 'Full bottle' : k === 'half' ? 'Half' : 'Custom');
+  const kindLabel = (k) => (k === 'bottle' ? 'Full bottle' : k === 'half' ? 'Half' : k === 'glass' ? 'Glass' : 'Custom');
 
   function pad(n) { return String(n).padStart(2, '0'); }
   function timeLabel(ts) {
@@ -857,6 +858,7 @@
 
     el.addFull.addEventListener('click', () => logWater(settings.bottleMl, 'bottle'));
     el.addHalf.addEventListener('click', () => logWater(Math.round(settings.bottleMl / 2), 'half'));
+    el.addGlass.addEventListener('click', () => logWater(240, 'glass')); // a fixed 240 ml glass
 
     // custom popover
     el.customBtn.addEventListener('click', () => togglePopover());

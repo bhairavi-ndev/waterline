@@ -147,9 +147,11 @@ function createWindow() {
         await mainWindow.webContents.executeJavaScript("document.getElementById('customBtn').click()");
         await wait(300);
         await shot('custom');
-        // exercise a real log end-to-end
+        // exercise real logs end-to-end (a full bottle + a 240 ml glass)
         await mainWindow.webContents.executeJavaScript("document.getElementById('addFull').click()");
-        await wait(1300);
+        await wait(400);
+        await mainWindow.webContents.executeJavaScript("document.getElementById('addGlass').click()");
+        await wait(1100);
         await shot('afterlog');
         // day editor: backfill 250 ml to yesterday via the jump-to-date picker
         const yKey = (() => {

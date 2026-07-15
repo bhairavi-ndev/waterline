@@ -28,6 +28,12 @@ test('addWater logs to today by default', () => {
   assert.equal(s.getToday().entries.length, 1);
 });
 
+test('addWater preserves the glass kind', () => {
+  const s = freshStore();
+  const day = s.addWater(240, 'glass');
+  assert.equal(day.entries.at(-1).kind, 'glass');
+});
+
 test('addWater clamps ml to [1, 3000]', () => {
   const s = freshStore();
   const big = s.addWater(99999, 'custom');
