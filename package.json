@@ -6,6 +6,7 @@
   "main": "src/main.js",
   "scripts": {
     "start": "electron .",
+    "test": "node --test",
     "make-icons": "node build/make-icons.js",
     "fetch-fonts": "node build/fetch-fonts.js",
     "assets": "node build/make-icons.js && node build/fetch-fonts.js",

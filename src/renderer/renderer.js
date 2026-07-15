@@ -74,6 +74,7 @@
     swStartup: $('swStartup'),
     swTray: $('swTray'),
     swWidget: $('swWidget'),
+    swLowPower: $('swLowPower'),
     customPop: $('customPop'),
     customBtn: $('customBtn'),
     customInput: $('customInput'),
@@ -502,6 +503,7 @@
     el.swStartup.setAttribute('aria-checked', String(settings.launchOnStartup));
     el.swTray.setAttribute('aria-checked', String(settings.closeToTray));
     el.swWidget.setAttribute('aria-checked', String(settings.widgetEnabled));
+    el.swLowPower.setAttribute('aria-checked', String(settings.lowPowerMode));
     [...el.themeSeg.children].forEach((b) => {
       const on = b.dataset.val === settings.theme;
       b.classList.toggle('is-active', on);
@@ -514,6 +516,7 @@
 
   async function updateSettings(partial) {
     settings = await api.updateSettings(partial);
+    applyLowPower(settings.lowPowerMode);
     refreshButtonLabels();
     renderSettings();
     buildTicks();
@@ -525,6 +528,20 @@
   // ---- theme ---------------------------------------------------------------
   function applyTheme(theme) {
     document.documentElement.setAttribute('data-theme', theme);
+  }
+
+  // ---- power saving --------------------------------------------------------
+  // Low power mode strips decorative animation immediately (the GPU-accel half
+  // needs a restart, handled in main). Idle-pausing halts the wave whenever the
+  // window is unfocused or hidden so it isn't compositing behind other apps.
+  function applyLowPower(on) {
+    if (on) document.documentElement.setAttribute('data-lowpower', 'true');
+    else document.documentElement.removeAttribute('data-lowpower');
+  }
+
+  function updateIdle() {
+    const idle = document.hidden || !document.hasFocus();
+    document.documentElement.classList.toggle('is-idle', idle);
   }
 
   // ---- tabs ----------------------------------------------------------------
@@ -639,6 +656,9 @@
     el.swWidget.addEventListener('click', () =>
       updateSettings({ widgetEnabled: el.swWidget.getAttribute('aria-checked') !== 'true' })
     );
+    el.swLowPower.addEventListener('click', () =>
+      updateSettings({ lowPowerMode: el.swLowPower.getAttribute('aria-checked') !== 'true' })
+    );
     el.selInterval.addEventListener('change', () =>
       updateSettings({ reminderIntervalMin: Number(el.selInterval.value) })
     );
@@ -667,10 +687,16 @@
       if (document.getElementById('view-history').classList.contains('is-active')) renderHistory();
     });
 
+    // Pause the wave animation whenever the window is unfocused or hidden.
+    window.addEventListener('blur', updateIdle);
+    window.addEventListener('focus', updateIdle);
+    document.addEventListener('visibilitychange', updateIdle);
+
     // events from main
     api.onRefresh(async () => {
       const s = await api.getState();
       settings = s.settings;
+      applyLowPower(settings.lowPowerMode);
       refreshButtonLabels();
       renderSettings();
       buildTicks();
@@ -701,6 +727,8 @@
     settings = s.settings;
     today = s.today;
     applyTheme(s.resolvedTheme);
+    applyLowPower(settings.lowPowerMode);
+    updateIdle();
     buildWave();
     buildTicks();
     refreshButtonLabels();

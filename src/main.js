@@ -14,10 +14,22 @@ const {
 } = require('electron');
 const path = require('path');
 const { Store, dateKey } = require('./store');
+const { createReminderScheduler } = require('./reminders');
 
 const APP_ID = 'com.kaamil.waterline';
 const APP_NAME = 'Waterline';
 const ASSETS = path.join(__dirname, '..', 'assets');
+
+// Low-power mode's GPU switch must be honored BEFORE the app is ready
+// (`disableHardwareAcceleration` is only valid pre-ready), so read the saved
+// settings file directly here rather than waiting for the Store.
+try {
+  const udBase = process.env.WATERLINE_USERDATA || app.getPath('userData');
+  const saved = JSON.parse(require('fs').readFileSync(path.join(udBase, 'waterline.json'), 'utf8'));
+  if (saved && saved.settings && saved.settings.lowPowerMode) app.disableHardwareAcceleration();
+} catch (_) {
+  /* no saved settings yet -> default (GPU on) */
+}
 
 let mainWindow = null;
 let widgetWindow = null;
@@ -25,10 +37,8 @@ let widgetSaveTimer = null;
 let widgetDrag = null; // { dx, dy } offset from cursor to window origin while dragging
 let tray = null;
 let store = null;
-let reminderTimer = null;
+let scheduler = null;
 
-let nudgeAnchor = Date.now(); // interval is measured from here (last drink / last nudge)
-let reminderIdx = 0;
 let lastDayKey = dateKey();
 let celebratedDayKey = null; // guards the once-a-day goal toast
 let pausedDayKey = null; // 'Pause reminders today' from the tray
@@ -229,7 +239,9 @@ function createWidget() {
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: true,
-      backgroundThrottling: false,
+      // Let Chromium idle the wave animation while the widget is occluded behind
+      // active windows — it only needs to paint when the desktop is visible.
+      backgroundThrottling: true,
     },
   });
 
@@ -300,7 +312,7 @@ function trayIcon() {
 function logFromTray(ml, kind) {
   const prev = store.getToday().totalMl;
   const day = store.addWater(ml, kind);
-  nudgeAnchor = Date.now();
+  if (scheduler) scheduler.noteActivity();
   maybeCelebrate(prev, day);
   refreshRenderer();
   updateTrayTooltip(day);
@@ -324,6 +336,7 @@ function buildTrayMenu() {
       click: () => {
         pausedDayKey = isPausedToday() ? null : dateKey();
         rebuildTray();
+        if (scheduler) scheduler.reschedule();
       },
     },
     { type: 'separator' },
@@ -357,23 +370,11 @@ function createTray() {
 
 // ---------------------------------------------------------------------------
 // Reminders
+//
+// Timing lives in ./reminders (createReminderScheduler): the loop wakes only at
+// the next meaningful moment (a nudge, quiet-hours end, or midnight rollover)
+// rather than polling every 30s. This file supplies the side effects.
 // ---------------------------------------------------------------------------
-function parseHM(str) {
-  const [h, m] = String(str || '0:0').split(':').map((n) => parseInt(n, 10) || 0);
-  return h * 60 + m;
-}
-
-function inQuietHours(settings, now = new Date()) {
-  const q = settings.quietHours;
-  if (!q || !q.enabled) return false;
-  const cur = now.getHours() * 60 + now.getMinutes();
-  const start = parseHM(q.start);
-  const end = parseHM(q.end);
-  if (start === end) return false;
-  if (start < end) return cur >= start && cur < end;
-  return cur >= start || cur < end; // wraps past midnight
-}
-
 function checkDayRollover() {
   const today = dateKey();
   if (today !== lastDayKey) {
@@ -387,7 +388,7 @@ function checkDayRollover() {
   return false;
 }
 
-function reminderCopy(day, s) {
+function reminderCopy(day, s, idx) {
   const remaining = Math.max(0, day.goalMl - day.totalMl);
   const bottles = Math.max(1, Math.ceil(remaining / Math.max(1, s.bottleMl)));
   const total = day.totalMl.toLocaleString('en');
@@ -399,31 +400,22 @@ function reminderCopy(day, s) {
     { title: 'Water break', body: `It's been a while since your last drink. A half bottle takes you to ${pctAfterHalf}%.` },
     { title: 'Your bottle misses you', body: `${total} ml down, ${rem} to go. Keep it moving.` },
   ];
-  return variants[reminderIdx % variants.length];
+  return variants[idx % variants.length];
 }
 
-function reminderTick() {
-  checkDayRollover();
-
-  const s = store.getSettings();
-  if (!s.remindersEnabled || isPausedToday()) return;
-  if (inQuietHours(s)) return;
-
-  const day = store.getToday();
-  if (day.totalMl >= day.goalMl) return; // goal met, relax
-
-  const now = Date.now();
-  const intervalMs = Math.max(5, s.reminderIntervalMin) * 60 * 1000;
-  if (now - nudgeAnchor < intervalMs) return;
-
-  if (!Notification.isSupported()) return;
-  const copy = reminderCopy(day, s);
-  reminderIdx++;
-  nudgeAnchor = now;
-
-  const n = new Notification({ ...copy, icon: path.join(ASSETS, 'icon.png'), silent: false });
-  n.on('click', () => showWindow(true));
-  n.show();
+function buildScheduler() {
+  return createReminderScheduler({
+    getSettings: () => store.getSettings(),
+    getToday: () => store.getToday(),
+    isPaused: isPausedToday,
+    onWake: checkDayRollover,
+    fireNudge: (day, s, idx) => {
+      if (!Notification.isSupported()) return;
+      const n = new Notification({ ...reminderCopy(day, s, idx), icon: path.join(ASSETS, 'icon.png'), silent: false });
+      n.on('click', () => showWindow(true));
+      n.show();
+    },
+  });
 }
 
 function maybeCelebrate(prevTotal, day) {
@@ -441,12 +433,6 @@ function maybeCelebrate(prevTotal, day) {
       n.show();
     }
   }
-}
-
-function startReminderLoop() {
-  nudgeAnchor = Date.now();
-  if (reminderTimer) clearInterval(reminderTimer);
-  reminderTimer = setInterval(reminderTick, 30 * 1000);
 }
 
 // ---------------------------------------------------------------------------
@@ -484,7 +470,7 @@ function registerIpc() {
     const kind = typeof payload === 'object' && payload ? payload.kind : 'custom';
     const prev = store.getToday().totalMl;
     const day = store.addWater(ml, kind);
-    nudgeAnchor = Date.now();
+    if (scheduler) scheduler.noteActivity();
     maybeCelebrate(prev, day);
     updateTrayTooltip(day);
     refreshOthers(e.sender); // keep the other window (main <-> widget) in sync
@@ -544,7 +530,9 @@ function registerIpc() {
       app.setLoginItemSettings({ openAtLogin: !!settings.launchOnStartup, args: ['--opened-at-login'] });
     }
     if (partial && ('remindersEnabled' in partial || 'reminderIntervalMin' in partial)) {
-      nudgeAnchor = Date.now();
+      if (scheduler) scheduler.noteActivity(); // reset the interval anchor + re-arm
+    } else if (partial && 'quietHours' in partial) {
+      if (scheduler) scheduler.reschedule(); // quiet-window edges moved
     }
     if (partial && 'widgetEnabled' in partial) {
       setWidgetEnabled(settings.widgetEnabled);
@@ -588,7 +576,8 @@ if (!gotLock) {
     registerIpc();
     createWindow();
     createTray();
-    startReminderLoop();
+    scheduler = buildScheduler();
+    scheduler.start();
     if (store.getSettings().widgetEnabled) createWidget();
 
     nativeTheme.on('updated', () => {
@@ -598,7 +587,7 @@ if (!gotLock) {
 
     powerMonitor.on('resume', () => {
       checkDayRollover();
-      reminderTick();
+      if (scheduler) scheduler.reschedule(); // recompute after the clock jumped
     });
 
     app.on('activate', () => {

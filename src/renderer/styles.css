@@ -541,3 +541,11 @@ button { font-family: inherit; color: inherit; cursor: pointer; border: none; ba
   .wave { display: none; }
   * { animation: none !important; }
 }
+
+/* ---- idle: pause the wave while the window is unfocused / hidden ---- */
+html.is-idle .wave { animation-play-state: paused; }
+
+/* ---- low power: no GPU-churning animation (like reduced motion) ---- */
+:root[data-lowpower="true"] .water-group { transition: opacity 0.15s linear; }
+:root[data-lowpower="true"] .wave { display: none; }
+:root[data-lowpower="true"] * { animation: none !important; }

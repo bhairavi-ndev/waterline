@@ -34,6 +34,7 @@ function defaultSettings() {
     remindersEnabled: true,
     quietHours: { enabled: true, start: '22:00', end: '08:00' },
     theme: 'system', // 'light' | 'dark' | 'system'
+    lowPowerMode: false, // disable GPU accel (needs restart) + strip animations
     launchOnStartup: false,
     closeToTray: true,
     widgetEnabled: false,
