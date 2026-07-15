@@ -144,6 +144,19 @@ function createWindow() {
         await mainWindow.webContents.executeJavaScript("document.getElementById('addFull').click()");
         await wait(1300);
         await shot('afterlog');
+        // day editor: backfill 250 ml to yesterday via the jump-to-date picker
+        const yKey = (() => {
+          const d = new Date(); d.setDate(d.getDate() - 1);
+          const p = (n) => String(n).padStart(2, '0');
+          return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+        })();
+        await mainWindow.webContents.executeJavaScript("document.querySelector('[data-tab=history]').click()");
+        await wait(400);
+        await mainWindow.webContents.executeJavaScript(`(() => { const d = document.getElementById('jumpDate'); d.value = '${yKey}'; d.dispatchEvent(new Event('change')); })()`);
+        await wait(500);
+        await mainWindow.webContents.executeJavaScript("(() => { const m = document.getElementById('editMl'); m.value = '250'; document.getElementById('editAdd').click(); })()");
+        await wait(600);
+        await shot('editor');
       } catch (e) {
         console.log('[shot-error]', String(e));
       }
@@ -465,14 +478,19 @@ function registerIpc() {
     paused: isPausedToday(),
   }));
 
+  // Today's logs drive reminders/celebration/tray; edits to a *past* day only
+  // persist and refresh history — they never touch the reminder loop.
   ipcMain.handle('water:add', (e, payload) => {
-    const ml = typeof payload === 'object' && payload ? payload.ml : payload;
-    const kind = typeof payload === 'object' && payload ? payload.kind : 'custom';
-    const prev = store.getToday().totalMl;
-    const day = store.addWater(ml, kind);
-    if (scheduler) scheduler.noteActivity();
-    maybeCelebrate(prev, day);
-    updateTrayTooltip(day);
+    const p = payload && typeof payload === 'object' ? payload : { ml: payload, kind: 'custom' };
+    const key = p.dateKey || dateKey();
+    const isToday = key === dateKey();
+    const prev = isToday ? store.getToday().totalMl : 0;
+    const day = store.addWater(p.ml, p.kind, { dateKey: key, ts: p.ts });
+    if (isToday) {
+      if (scheduler) scheduler.noteActivity();
+      maybeCelebrate(prev, day);
+      updateTrayTooltip(day);
+    }
     refreshOthers(e.sender); // keep the other window (main <-> widget) in sync
     return day;
   });
@@ -484,12 +502,24 @@ function registerIpc() {
     return day;
   });
 
-  ipcMain.handle('water:remove', (e, id) => {
-    const day = store.removeEntry(id);
-    updateTrayTooltip(day);
+  ipcMain.handle('water:remove', (e, arg) => {
+    const id = arg && typeof arg === 'object' ? arg.id : arg;
+    const key = (arg && typeof arg === 'object' && arg.dateKey) || dateKey();
+    const day = store.removeEntry(id, key);
+    if (key === dateKey()) updateTrayTooltip(day);
     refreshOthers(e.sender);
     return day;
   });
+
+  ipcMain.handle('entry:edit', (e, { id, patch, dateKey: key }) => {
+    const k = key || dateKey();
+    const day = store.editEntry(id, patch || {}, k);
+    if (k === dateKey()) updateTrayTooltip(day);
+    refreshOthers(e.sender);
+    return day;
+  });
+
+  ipcMain.handle('day:get', (_e, key) => store.getDay(key || dateKey()));
 
   ipcMain.handle('app:show', () => showWindow(true));
 

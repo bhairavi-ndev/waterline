@@ -415,6 +415,52 @@ button { font-family: inherit; color: inherit; cursor: pointer; border: none; ba
 .day-badge.hit { background: var(--water-mid); border-color: var(--water-mid); }
 .hist-empty { color: var(--text-2); font-size: 13px; text-align: center; padding: 30px 0; }
 
+/* clickable history rows open the day editor */
+.day-row { cursor: pointer; transition: background 0.12s; }
+.day-row:hover { background: var(--surface-sunken); }
+.day-row:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; border-radius: 6px; }
+
+/* ---- day editor (log / edit any day) ---- */
+.hist-tools { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin: 14px 0 8px; }
+.hist-jump { font-size: 13px; font-weight: 500; color: var(--text-2); }
+.date-input {
+  font-family: var(--font-mono); font-size: 13px; color: var(--text);
+  background: var(--surface-sunken); border: 1px solid var(--border);
+  border-radius: var(--r-input); height: 34px; padding: 0 8px;
+}
+.date-input:focus { outline: none; border-color: var(--accent); }
+
+.day-editor { margin: 0 0 14px; }
+.day-editor-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+.day-editor-title { font-weight: 600; font-size: 14px; }
+.day-editor-close {
+  width: 26px; height: 26px; border-radius: 6px;
+  color: var(--text-3); font-size: 17px; line-height: 1;
+}
+.day-editor-close:hover { color: var(--text); background: var(--surface-sunken); }
+
+.edit-list { list-style: none; display: flex; flex-direction: column; gap: 8px; }
+.edit-row { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 10px; }
+.edit-row-time { width: 108px; }
+.edit-row-ml, .edit-add-ml { display: inline-flex; align-items: center; gap: 6px; color: var(--text-3); font-size: 12px; }
+.edit-row-ml input, .edit-add-ml input {
+  width: 84px; font-family: var(--font-mono); font-size: 14px; color: var(--text);
+  background: var(--surface-sunken); border: 1px solid var(--border);
+  border-radius: var(--r-input); height: 34px; padding: 0 8px;
+}
+.edit-row-ml input:focus, .edit-add-ml input:focus { outline: none; border-color: var(--accent); }
+.edit-row-remove {
+  width: 26px; height: 26px; border-radius: 6px;
+  color: var(--text-3); font-size: 15px; line-height: 1;
+}
+.edit-row-remove:hover { color: var(--danger); background: var(--surface-sunken); }
+.edit-empty { color: var(--text-2); font-size: 13px; padding: 8px 0; }
+.edit-add {
+  display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 10px;
+  margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border);
+}
+.edit-add .time { width: 108px; }
+
 /* ---- settings ---- */
 .set-card { padding: 6px 16px 16px; margin-bottom: 14px; }
 .set-card .eyebrow { margin-top: 12px; }

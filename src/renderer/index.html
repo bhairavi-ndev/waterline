@@ -154,6 +154,30 @@
       <div class="card chart-card">
         <div id="chartHost" class="chart-host"></div>
       </div>
+
+      <div class="hist-tools">
+        <label class="hist-jump" for="jumpDate">Log or edit a day</label>
+        <input type="date" id="jumpDate" class="date-input" aria-label="Pick a day to log or edit" />
+      </div>
+
+      <!-- Day editor (opens when a day is picked or a history row is clicked) -->
+      <div class="card day-editor" id="dayEditor" hidden>
+        <div class="day-editor-head">
+          <span class="day-editor-title" id="dayEditorTitle">—</span>
+          <button class="day-editor-close" id="dayEditorClose" title="Close" aria-label="Close editor">×</button>
+        </div>
+        <ul class="edit-list" id="editList"></ul>
+        <div class="edit-empty" id="editEmpty" hidden>Nothing logged this day yet.</div>
+        <div class="edit-add">
+          <input type="time" id="editTime" class="time" aria-label="New entry time" />
+          <span class="edit-add-ml">
+            <input type="number" id="editMl" inputmode="numeric" min="1" max="3000" step="10" placeholder="250" aria-label="New entry amount, millilitres" />
+            <span>ml</span>
+          </span>
+          <button class="btn btn-primary btn-sm" id="editAdd">Add</button>
+        </div>
+      </div>
+
       <ul id="dayList" class="day-list"></ul>
       <div id="histEmpty" class="hist-empty" hidden>History fills up as you drink. Check back tomorrow.</div>
     </section>

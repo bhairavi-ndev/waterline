@@ -63,6 +63,18 @@ function makeId() {
   return Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
 }
 
+/** ml bounds for a single entry (matches the custom-amount input's max). */
+const ML_BOUNDS = [1, 3000];
+function clampMl(ml) {
+  const n = Math.round(Number(ml) || 0);
+  return Math.min(ML_BOUNDS[1], Math.max(ML_BOUNDS[0], n));
+}
+
+/** 'YYYY-MM-DD' strings sort lexically, so a plain compare gives date order. */
+function isFutureKey(key) {
+  return key > dateKey();
+}
+
 class Store {
   constructor(filePath) {
     this.filePath = filePath;
@@ -126,12 +138,32 @@ class Store {
     return this.ensureDay();
   }
 
-  addWater(ml, kind = 'custom') {
-    const amount = Math.max(1, Math.round(Number(ml) || 0));
+  /** A day record without creating one — a transient zero record when absent. */
+  getDay(key) {
+    return this.state.days[key] || {
+      totalMl: 0,
+      goalMl: this.state.settings.dailyGoalMl,
+      entries: [],
+    };
+  }
+
+  recomputeTotal(day) {
+    day.totalMl = day.entries.reduce((sum, e) => sum + e.ml, 0);
+    return day;
+  }
+
+  /**
+   * Log water. Defaults to today/now; pass { dateKey, ts } to backfill a past
+   * day (a new past-day record snapshots the current goal). Refuses the future.
+   */
+  addWater(ml, kind = 'custom', opts = {}) {
+    const amount = clampMl(ml);
     const k = ['bottle', 'half', 'custom'].includes(kind) ? kind : 'custom';
-    const day = this.ensureDay();
-    const entry = { id: makeId(), ml: amount, kind: k, ts: new Date().toISOString() };
-    day.entries.push(entry);
+    const key = opts.dateKey || dateKey();
+    if (isFutureKey(key)) throw new RangeError('cannot log water for a future date');
+    const day = this.ensureDay(key);
+    const ts = opts.ts || new Date().toISOString();
+    day.entries.push({ id: makeId(), ml: amount, kind: k, ts });
     day.totalMl += amount;
     this._write();
     return day;
@@ -147,12 +179,27 @@ class Store {
     return day;
   }
 
-  removeEntry(id) {
-    const day = this.getToday();
+  removeEntry(id, key = dateKey()) {
+    const day = this.state.days[key];
+    if (!day) return this.getDay(key);
     const idx = day.entries.findIndex((e) => e.id === id);
     if (idx !== -1) {
-      const [entry] = day.entries.splice(idx, 1);
-      day.totalMl = Math.max(0, day.totalMl - entry.ml);
+      day.entries.splice(idx, 1);
+      this.recomputeTotal(day);
+      this._write();
+    }
+    return day;
+  }
+
+  /** Edit an entry's ml and/or timestamp on any day, then recompute the total. */
+  editEntry(id, patch = {}, key = dateKey()) {
+    const day = this.state.days[key];
+    if (!day) return this.getDay(key);
+    const entry = day.entries.find((e) => e.id === id);
+    if (entry) {
+      if (patch.ml != null) entry.ml = clampMl(patch.ml);
+      if (patch.ts != null) entry.ts = patch.ts;
+      this.recomputeTotal(day);
       this._write();
     }
     return day;

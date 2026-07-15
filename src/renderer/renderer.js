@@ -27,6 +27,7 @@
   let celebrateTimer = null;
   let toastTimer = null;
   let hadGoalBadge = false;
+  let editingKey = null; // date key currently open in the History day editor
 
   // ---- dom -----------------------------------------------------------------
   const $ = (id) => document.getElementById(id);
@@ -59,6 +60,15 @@
     chartTip: $('chartTip'),
     dayList: $('dayList'),
     histEmpty: $('histEmpty'),
+    jumpDate: $('jumpDate'),
+    dayEditor: $('dayEditor'),
+    dayEditorTitle: $('dayEditorTitle'),
+    dayEditorClose: $('dayEditorClose'),
+    editList: $('editList'),
+    editEmpty: $('editEmpty'),
+    editTime: $('editTime'),
+    editMl: $('editMl'),
+    editAdd: $('editAdd'),
     statStreak: $('statStreak'),
     statAvg: $('statAvg'),
     valGoal: $('valGoal'),
@@ -460,10 +470,13 @@
 
   function renderDayList(shown) {
     el.dayList.textContent = '';
-    const todayKey = shown[0] ? shown[0].date : null;
     shown.forEach((d, idx) => {
       const li = document.createElement('li');
       li.className = 'day-row';
+      li.dataset.date = d.date;
+      li.tabIndex = 0;
+      li.setAttribute('role', 'button');
+      li.title = `Log or edit ${dayName(d.date, idx)}`;
       const name = document.createElement('span');
       name.className = 'day-name';
       name.textContent = dayName(d.date, idx);
@@ -478,8 +491,125 @@
       badge.className = 'day-badge' + (hit ? ' hit' : '');
       badge.title = hit ? 'Goal reached' : 'Goal missed';
       li.append(name, total, bottles, badge);
+      li.addEventListener('click', () => openDayEditor(d.date));
+      li.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openDayEditor(d.date); }
+      });
       el.dayList.appendChild(li);
     });
+  }
+
+  // ---- day editor (log / edit any day) -------------------------------------
+  function localKey(d = new Date()) {
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+  }
+  function friendlyDay(key) {
+    const y = new Date(); y.setDate(y.getDate() - 1);
+    if (key === localKey()) return 'Today';
+    if (key === localKey(y)) return 'Yesterday';
+    const d = parseKey(key);
+    return `${WEEKDAYS[d.getDay()]}, ${d.getDate()} ${MONTHS[d.getMonth()]} ${d.getFullYear()}`;
+  }
+  function hhmmFromTs(ts) {
+    const d = new Date(ts);
+    return `${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  }
+  function tsForKey(key, hhmm) {
+    const [y, m, d] = key.split('-').map(Number);
+    const [h, mi] = String(hhmm || '12:00').split(':').map(Number);
+    return new Date(y, m - 1, d, h || 0, mi || 0, 0, 0).toISOString();
+  }
+
+  async function openDayEditor(key) {
+    editingKey = key;
+    const day = await api.getDay(key);
+    renderDayEditor(key, day);
+    el.dayEditor.hidden = false;
+    el.jumpDate.value = key;
+    const now = new Date();
+    el.editTime.value = key === localKey() ? `${pad(now.getHours())}:${pad(now.getMinutes())}` : '12:00';
+    el.editMl.value = '';
+    el.dayEditor.scrollIntoView({ block: 'nearest' });
+  }
+
+  function closeDayEditor() {
+    el.dayEditor.hidden = true;
+    editingKey = null;
+  }
+
+  function renderDayEditor(key, day) {
+    el.dayEditorTitle.textContent = friendlyDay(key);
+    el.editList.textContent = '';
+    const entries = day.entries.slice().sort((a, b) => new Date(a.ts) - new Date(b.ts));
+    el.editEmpty.hidden = entries.length > 0;
+    for (const e of entries) {
+      const li = document.createElement('li');
+      li.className = 'edit-row';
+
+      const time = document.createElement('input');
+      time.type = 'time';
+      time.className = 'time edit-row-time';
+      time.value = hhmmFromTs(e.ts);
+      time.setAttribute('aria-label', 'Entry time');
+      time.addEventListener('change', async () => {
+        await api.editEntry(e.id, { ts: tsForKey(key, time.value) }, key);
+        await refreshAfterEdit(key);
+      });
+
+      const mlWrap = document.createElement('span');
+      mlWrap.className = 'edit-row-ml';
+      const ml = document.createElement('input');
+      ml.type = 'number';
+      ml.min = '1'; ml.max = '3000'; ml.step = '10';
+      ml.value = String(e.ml);
+      ml.setAttribute('aria-label', 'Amount, millilitres');
+      ml.addEventListener('change', async () => {
+        const v = clamp(Math.round(Number(ml.value)) || 1, 1, 3000);
+        await api.editEntry(e.id, { ml: v }, key);
+        await refreshAfterEdit(key);
+      });
+      const unit = document.createElement('span');
+      unit.textContent = 'ml';
+      mlWrap.append(ml, unit);
+
+      const rm = document.createElement('button');
+      rm.className = 'edit-row-remove';
+      rm.textContent = '×';
+      rm.title = 'Remove entry';
+      rm.setAttribute('aria-label', 'Remove entry');
+      rm.addEventListener('click', async () => {
+        await api.removeEntry(e.id, key);
+        await refreshAfterEdit(key);
+      });
+
+      li.append(time, mlWrap, rm);
+      el.editList.appendChild(li);
+    }
+  }
+
+  async function commitAddEntry() {
+    if (!editingKey) return;
+    const raw = Number(el.editMl.value);
+    if (!Number.isFinite(raw) || raw <= 0) return;
+    const ml = clamp(Math.round(raw), 1, 3000);
+    try {
+      await api.addWater(ml, 'custom', { dateKey: editingKey, ts: tsForKey(editingKey, el.editTime.value) });
+    } catch (_) {
+      return; // e.g. the future-date guard rejected it
+    }
+    el.editMl.value = '';
+    await refreshAfterEdit(editingKey);
+  }
+
+  async function refreshAfterEdit(key) {
+    const day = await api.getDay(key);
+    renderDayEditor(key, day);
+    await renderHistory();
+    if (key === localKey()) {
+      const s = await api.getState();
+      settings = s.settings;
+      applyDay(s.today, { animate: false });
+    }
   }
 
   function dayName(key, idx) {
@@ -685,6 +815,17 @@
 
     window.addEventListener('resize', () => {
       if (document.getElementById('view-history').classList.contains('is-active')) renderHistory();
+    });
+
+    // Day editor (log / edit any day)
+    el.jumpDate.max = localKey();
+    el.jumpDate.addEventListener('change', () => {
+      if (el.jumpDate.value) openDayEditor(el.jumpDate.value);
+    });
+    el.dayEditorClose.addEventListener('click', closeDayEditor);
+    el.editAdd.addEventListener('click', commitAddEntry);
+    el.editMl.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') commitAddEntry();
     });
 
     // Pause the wave animation whenever the window is unfocused or hidden.
