@@ -27,6 +27,8 @@
   let celebrateTimer = null;
   let toastTimer = null;
   let hadGoalBadge = false;
+  let editingKey = null; // date key currently open in the History day editor
+  let paceTimer = null;  // 60s tick while focused + Today active
 
   // ---- dom -----------------------------------------------------------------
   const $ = (id) => document.getElementById(id);
@@ -45,6 +47,11 @@
     chips: document.querySelector('.chips'),
     chipPct: $('chipPct'),
     chipBottles: $('chipBottles'),
+    paceStatus: $('paceStatus'),
+    paceMain: $('paceMain'),
+    paceSub: $('paceSub'),
+    paceCard: $('paceCard'),
+    paceHost: $('paceHost'),
     encourage: $('encourage'),
     fullLbl: $('fullLbl'),
     halfLbl: $('halfLbl'),
@@ -59,6 +66,15 @@
     chartTip: $('chartTip'),
     dayList: $('dayList'),
     histEmpty: $('histEmpty'),
+    jumpDate: $('jumpDate'),
+    dayEditor: $('dayEditor'),
+    dayEditorTitle: $('dayEditorTitle'),
+    dayEditorClose: $('dayEditorClose'),
+    editList: $('editList'),
+    editEmpty: $('editEmpty'),
+    editTime: $('editTime'),
+    editMl: $('editMl'),
+    editAdd: $('editAdd'),
     statStreak: $('statStreak'),
     statAvg: $('statAvg'),
     valGoal: $('valGoal'),
@@ -74,6 +90,11 @@
     swStartup: $('swStartup'),
     swTray: $('swTray'),
     swWidget: $('swWidget'),
+    swLowPower: $('swLowPower'),
+    exportRange: $('exportRange'),
+    exportPdf: $('exportPdf'),
+    exportCsv: $('exportCsv'),
+    exportJson: $('exportJson'),
     customPop: $('customPop'),
     customBtn: $('customBtn'),
     customInput: $('customInput'),
@@ -285,6 +306,7 @@
     hadGoalBadge = hitToday;
 
     renderLog();
+    renderPace();
   }
 
   function renderLog() {
@@ -312,6 +334,131 @@
       rm.addEventListener('click', () => removeEntry(e.id));
       li.append(time, ml, kind, rm);
       el.logList.appendChild(li);
+    }
+  }
+
+  // ---- pace (hydration debt) -----------------------------------------------
+  function nowMinutes() {
+    const d = new Date();
+    return d.getHours() * 60 + d.getMinutes();
+  }
+  function hourLabel(min) {
+    let h = Math.round(min / 60) % 24;
+    const ap = h < 12 ? 'a' : 'p';
+    h %= 12;
+    if (h === 0) h = 12;
+    return `${h}${ap}`;
+  }
+
+  function entryMin(e) {
+    const d = new Date(e.ts);
+    return d.getHours() * 60 + d.getMinutes();
+  }
+
+  function renderPace() {
+    if (!settings || !today) return;
+    const goal = today.goalMl || settings.dailyGoalMl;
+    const win = Pace.awakeWindow(settings);
+    const nowMin = nowMinutes();
+    // Debt is intake *by now*: entries timestamped later than now (rare — only
+    // via backfilling today) don't count toward how far along you should be.
+    const entries = today.entries.slice().sort((a, b) => new Date(a.ts) - new Date(b.ts));
+    const actualByNow = entries.reduce((sum, e) => sum + (entryMin(e) <= nowMin ? e.ml : 0), 0);
+    const st = Pace.paceStatus({ nowMin, goal, actualMl: actualByNow, win });
+
+    el.paceStatus.hidden = false;
+    el.paceCard.hidden = false;
+    el.paceStatus.classList.remove('is-behind', 'is-ahead', 'is-ontrack');
+    if (st.state === 'behind') {
+      el.paceStatus.classList.add('is-behind');
+      el.paceMain.textContent = `Behind by ${fmt(st.debtMl)} ml`;
+      el.paceSub.textContent = `expected ~${fmt(st.expectedMl)} ml by now`;
+    } else if (st.state === 'ahead') {
+      el.paceStatus.classList.add('is-ahead');
+      el.paceMain.textContent = `Ahead by ${fmt(st.surplusMl)} ml`;
+      el.paceSub.textContent = st.expectedMl > 0 ? `expected ~${fmt(st.expectedMl)} ml by now` : 'ahead of the day’s pace';
+    } else {
+      el.paceStatus.classList.add('is-ontrack');
+      el.paceMain.textContent = 'On track';
+      el.paceSub.textContent = st.expectedMl > 0 ? `expected ~${fmt(st.expectedMl)} ml by now` : 'the day is just getting started';
+    }
+
+    drawPaceChart(win, goal, nowMin, entries);
+  }
+
+  function drawPaceChart(win, goal, nowMin, entries) {
+    const host = el.paceHost;
+    host.textContent = '';
+    const W = host.clientWidth || 340;
+    const H = 96;
+    const padT = 10, padB = 16, padL = 6, padR = 6;
+    const plotW = W - padL - padR;
+    const plotH = H - padT - padB;
+    const x0 = win.startMin, x1 = win.endMin;
+    const nowClamped = Math.max(x0, nowMin); // don't draw left of wake
+    const spanX = Math.max(1, x1 - x0);
+    const maxY = goal * 1.05 || 1;
+    const X = (min) => padL + ((clamp(min, x0, x1) - x0) / spanX) * plotW;
+    const Y = (ml) => padT + plotH - (clamp(ml, 0, maxY) / maxY) * plotH;
+
+    const s = svg('svg', { viewBox: `0 0 ${W} ${H}` });
+
+    // baseline
+    s.appendChild(svg('line', { x1: padL, y1: Y(0), x2: W - padR, y2: Y(0), class: 'pace-axis' }));
+
+    // expected line: (wake, 0) -> (bed, goal)
+    s.appendChild(svg('line', {
+      x1: X(x0), y1: Y(0), x2: X(x1), y2: Y(goal),
+      class: 'pace-expected', 'stroke-dasharray': '4 3',
+    }));
+
+    // actual cumulative step-line, only up to now (a monotonic "so far" line)
+    let cum = 0;
+    const pts = [{ min: x0, ml: 0 }];
+    for (const e of entries) {
+      const m = entryMin(e);
+      if (m > nowMin) break; // entries sorted asc; ignore future-timed ones
+      pts.push({ min: m, ml: cum });
+      cum += e.ml;
+      pts.push({ min: m, ml: cum });
+    }
+    pts.push({ min: nowClamped, ml: cum }); // extend flat to now
+
+    // gap connector at "now": actual -> expected, colored by state
+    const expNow = Pace.expectedMl(nowMin, goal, win);
+    s.appendChild(svg('line', {
+      x1: X(nowClamped), y1: Y(cum), x2: X(nowClamped), y2: Y(expNow),
+      class: 'pace-gap ' + (cum < expNow ? 'is-behind' : 'is-ahead'),
+    }));
+
+    let d = '';
+    pts.forEach((p, i) => { d += (i === 0 ? 'M' : 'L') + X(p.min).toFixed(1) + ',' + Y(p.ml).toFixed(1) + ' '; });
+    s.appendChild(svg('path', { d: d.trim(), class: 'pace-actual', fill: 'none' }));
+
+    // now dot
+    s.appendChild(svg('circle', { cx: X(nowClamped), cy: Y(cum), r: 3.2, class: 'pace-now' }));
+
+    // x-axis endpoints
+    const lx = svg('text', { x: padL, y: H - 4, 'text-anchor': 'start', class: 'chart-num', 'font-size': 9 });
+    lx.textContent = hourLabel(x0);
+    const rx = svg('text', { x: W - padR, y: H - 4, 'text-anchor': 'end', class: 'chart-num', 'font-size': 9 });
+    rx.textContent = hourLabel(x1);
+    s.append(lx, rx);
+
+    host.appendChild(s);
+  }
+
+  function todayViewActive() {
+    return document.getElementById('view-today').classList.contains('is-active');
+  }
+  function syncPaceTimer() {
+    const shouldRun = !document.hidden && document.hasFocus() && todayViewActive();
+    if (shouldRun && !paceTimer) {
+      paceTimer = setInterval(renderPace, 60 * 1000);
+      renderPace();
+    } else if (!shouldRun && paceTimer) {
+      clearInterval(paceTimer);
+      paceTimer = null;
     }
   }
 
@@ -343,12 +490,25 @@
     applyDay(day, { animate: true });
   }
 
-  function showToast(msg) {
+  function showToast(msg, withUndo = true) {
     el.toastMsg.textContent = msg;
+    el.toastUndo.hidden = !withUndo;
     el.toast.hidden = false;
     requestAnimationFrame(() => el.toast.classList.add('show'));
     clearTimeout(toastTimer);
     toastTimer = setTimeout(hideToast, 6000);
+  }
+
+  async function runExport(format) {
+    const range = el.exportRange.value;
+    let res;
+    try {
+      res = await api.exportReport(format, range);
+    } catch (_) {
+      res = { ok: false };
+    }
+    if (res && res.ok) showToast(`Exported ${format === 'pdf' ? 'PDF report' : format.toUpperCase()}`, false);
+    else if (!res || !res.canceled) showToast('Export failed', false);
   }
   function hideToast() {
     el.toast.classList.remove('show');
@@ -459,10 +619,13 @@
 
   function renderDayList(shown) {
     el.dayList.textContent = '';
-    const todayKey = shown[0] ? shown[0].date : null;
     shown.forEach((d, idx) => {
       const li = document.createElement('li');
       li.className = 'day-row';
+      li.dataset.date = d.date;
+      li.tabIndex = 0;
+      li.setAttribute('role', 'button');
+      li.title = `Log or edit ${dayName(d.date, idx)}`;
       const name = document.createElement('span');
       name.className = 'day-name';
       name.textContent = dayName(d.date, idx);
@@ -477,8 +640,125 @@
       badge.className = 'day-badge' + (hit ? ' hit' : '');
       badge.title = hit ? 'Goal reached' : 'Goal missed';
       li.append(name, total, bottles, badge);
+      li.addEventListener('click', () => openDayEditor(d.date));
+      li.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openDayEditor(d.date); }
+      });
       el.dayList.appendChild(li);
     });
+  }
+
+  // ---- day editor (log / edit any day) -------------------------------------
+  function localKey(d = new Date()) {
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+  }
+  function friendlyDay(key) {
+    const y = new Date(); y.setDate(y.getDate() - 1);
+    if (key === localKey()) return 'Today';
+    if (key === localKey(y)) return 'Yesterday';
+    const d = parseKey(key);
+    return `${WEEKDAYS[d.getDay()]}, ${d.getDate()} ${MONTHS[d.getMonth()]} ${d.getFullYear()}`;
+  }
+  function hhmmFromTs(ts) {
+    const d = new Date(ts);
+    return `${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  }
+  function tsForKey(key, hhmm) {
+    const [y, m, d] = key.split('-').map(Number);
+    const [h, mi] = String(hhmm || '12:00').split(':').map(Number);
+    return new Date(y, m - 1, d, h || 0, mi || 0, 0, 0).toISOString();
+  }
+
+  async function openDayEditor(key) {
+    editingKey = key;
+    const day = await api.getDay(key);
+    renderDayEditor(key, day);
+    el.dayEditor.hidden = false;
+    el.jumpDate.value = key;
+    const now = new Date();
+    el.editTime.value = key === localKey() ? `${pad(now.getHours())}:${pad(now.getMinutes())}` : '12:00';
+    el.editMl.value = '';
+    el.dayEditor.scrollIntoView({ block: 'nearest' });
+  }
+
+  function closeDayEditor() {
+    el.dayEditor.hidden = true;
+    editingKey = null;
+  }
+
+  function renderDayEditor(key, day) {
+    el.dayEditorTitle.textContent = friendlyDay(key);
+    el.editList.textContent = '';
+    const entries = day.entries.slice().sort((a, b) => new Date(a.ts) - new Date(b.ts));
+    el.editEmpty.hidden = entries.length > 0;
+    for (const e of entries) {
+      const li = document.createElement('li');
+      li.className = 'edit-row';
+
+      const time = document.createElement('input');
+      time.type = 'time';
+      time.className = 'time edit-row-time';
+      time.value = hhmmFromTs(e.ts);
+      time.setAttribute('aria-label', 'Entry time');
+      time.addEventListener('change', async () => {
+        await api.editEntry(e.id, { ts: tsForKey(key, time.value) }, key);
+        await refreshAfterEdit(key);
+      });
+
+      const mlWrap = document.createElement('span');
+      mlWrap.className = 'edit-row-ml';
+      const ml = document.createElement('input');
+      ml.type = 'number';
+      ml.min = '1'; ml.max = '3000'; ml.step = '10';
+      ml.value = String(e.ml);
+      ml.setAttribute('aria-label', 'Amount, millilitres');
+      ml.addEventListener('change', async () => {
+        const v = clamp(Math.round(Number(ml.value)) || 1, 1, 3000);
+        await api.editEntry(e.id, { ml: v }, key);
+        await refreshAfterEdit(key);
+      });
+      const unit = document.createElement('span');
+      unit.textContent = 'ml';
+      mlWrap.append(ml, unit);
+
+      const rm = document.createElement('button');
+      rm.className = 'edit-row-remove';
+      rm.textContent = '×';
+      rm.title = 'Remove entry';
+      rm.setAttribute('aria-label', 'Remove entry');
+      rm.addEventListener('click', async () => {
+        await api.removeEntry(e.id, key);
+        await refreshAfterEdit(key);
+      });
+
+      li.append(time, mlWrap, rm);
+      el.editList.appendChild(li);
+    }
+  }
+
+  async function commitAddEntry() {
+    if (!editingKey) return;
+    const raw = Number(el.editMl.value);
+    if (!Number.isFinite(raw) || raw <= 0) return;
+    const ml = clamp(Math.round(raw), 1, 3000);
+    try {
+      await api.addWater(ml, 'custom', { dateKey: editingKey, ts: tsForKey(editingKey, el.editTime.value) });
+    } catch (_) {
+      return; // e.g. the future-date guard rejected it
+    }
+    el.editMl.value = '';
+    await refreshAfterEdit(editingKey);
+  }
+
+  async function refreshAfterEdit(key) {
+    const day = await api.getDay(key);
+    renderDayEditor(key, day);
+    await renderHistory();
+    if (key === localKey()) {
+      const s = await api.getState();
+      settings = s.settings;
+      applyDay(s.today, { animate: false });
+    }
   }
 
   function dayName(key, idx) {
@@ -502,6 +782,7 @@
     el.swStartup.setAttribute('aria-checked', String(settings.launchOnStartup));
     el.swTray.setAttribute('aria-checked', String(settings.closeToTray));
     el.swWidget.setAttribute('aria-checked', String(settings.widgetEnabled));
+    el.swLowPower.setAttribute('aria-checked', String(settings.lowPowerMode));
     [...el.themeSeg.children].forEach((b) => {
       const on = b.dataset.val === settings.theme;
       b.classList.toggle('is-active', on);
@@ -514,6 +795,7 @@
 
   async function updateSettings(partial) {
     settings = await api.updateSettings(partial);
+    applyLowPower(settings.lowPowerMode);
     refreshButtonLabels();
     renderSettings();
     buildTicks();
@@ -525,6 +807,21 @@
   // ---- theme ---------------------------------------------------------------
   function applyTheme(theme) {
     document.documentElement.setAttribute('data-theme', theme);
+  }
+
+  // ---- power saving --------------------------------------------------------
+  // Low power mode strips decorative animation immediately (the GPU-accel half
+  // needs a restart, handled in main). Idle-pausing halts the wave whenever the
+  // window is unfocused or hidden so it isn't compositing behind other apps.
+  function applyLowPower(on) {
+    if (on) document.documentElement.setAttribute('data-lowpower', 'true');
+    else document.documentElement.removeAttribute('data-lowpower');
+  }
+
+  function updateIdle() {
+    const idle = document.hidden || !document.hasFocus();
+    document.documentElement.classList.toggle('is-idle', idle);
+    syncPaceTimer();
   }
 
   // ---- tabs ----------------------------------------------------------------
@@ -539,6 +836,8 @@
       v.classList.toggle('is-active', v.id === `view-${name}`);
     });
     if (name === 'history') renderHistory();
+    if (name === 'today') renderPace();
+    syncPaceTimer();
   }
 
   // ---- wiring --------------------------------------------------------------
@@ -639,6 +938,12 @@
     el.swWidget.addEventListener('click', () =>
       updateSettings({ widgetEnabled: el.swWidget.getAttribute('aria-checked') !== 'true' })
     );
+    el.swLowPower.addEventListener('click', () =>
+      updateSettings({ lowPowerMode: el.swLowPower.getAttribute('aria-checked') !== 'true' })
+    );
+    el.exportPdf.addEventListener('click', () => runExport('pdf'));
+    el.exportCsv.addEventListener('click', () => runExport('csv'));
+    el.exportJson.addEventListener('click', () => runExport('json'));
     el.selInterval.addEventListener('change', () =>
       updateSettings({ reminderIntervalMin: Number(el.selInterval.value) })
     );
@@ -665,12 +970,30 @@
 
     window.addEventListener('resize', () => {
       if (document.getElementById('view-history').classList.contains('is-active')) renderHistory();
+      if (todayViewActive()) renderPace();
     });
+
+    // Day editor (log / edit any day)
+    el.jumpDate.max = localKey();
+    el.jumpDate.addEventListener('change', () => {
+      if (el.jumpDate.value) openDayEditor(el.jumpDate.value);
+    });
+    el.dayEditorClose.addEventListener('click', closeDayEditor);
+    el.editAdd.addEventListener('click', commitAddEntry);
+    el.editMl.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') commitAddEntry();
+    });
+
+    // Pause the wave animation whenever the window is unfocused or hidden.
+    window.addEventListener('blur', updateIdle);
+    window.addEventListener('focus', updateIdle);
+    document.addEventListener('visibilitychange', updateIdle);
 
     // events from main
     api.onRefresh(async () => {
       const s = await api.getState();
       settings = s.settings;
+      applyLowPower(settings.lowPowerMode);
       refreshButtonLabels();
       renderSettings();
       buildTicks();
@@ -701,6 +1024,8 @@
     settings = s.settings;
     today = s.today;
     applyTheme(s.resolvedTheme);
+    applyLowPower(settings.lowPowerMode);
+    updateIdle();
     buildWave();
     buildTicks();
     refreshButtonLabels();
@@ -709,6 +1034,7 @@
     hadGoalBadge = today.totalMl >= (today.goalMl || settings.dailyGoalMl);
     applyDay(today, { animate: false });
     wire();
+    syncPaceTimer();
   }
 
   init();

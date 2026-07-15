@@ -10,10 +10,13 @@ Waterline is styled like laboratory glassware — a graduated bottle that litera
 
 - **Graduated fill-bottle** hero that fills in real time, with etched tick marks at every bottle and your daily goal.
 - **One-tap logging** — full bottle, half, or a custom amount — with an undo toast and a timestamped daily log.
+- **Hydration debt & pace** — see how far ahead or behind you are *right now* ("Behind by 320 ml — expected ~1,550 by now"), plus a "Pace today" chart of your expected vs. actual cumulative intake, so you catch a slow day before you feel it.
 - **Daily history** — a 7 / 30-day bar chart with your goal line, current streak, daily average, and goal-hit badges.
-- **Native reminders** — desktop notifications on your schedule, paused during quiet hours and once you've hit your goal, plus a once-a-day "goal reached" celebration.
+- **Log or edit any past day** — click a day in History (or pick any date) to add, adjust, or remove timed entries and backfill what you missed.
+- **Export a report** — a printable PDF summary, a CSV for spreadsheets, or a full JSON backup, over all time or the last 7 / 30 days.
+- **Native reminders** — desktop notifications on your schedule, paused during quiet hours and once you've hit your goal, plus a once-a-day "goal reached" celebration. An event-aligned scheduler wakes only when it needs to, so the app stays idle in the background.
 - **Pinned desktop widget** — a compact panel that sits on the desktop behind your windows, so you can log a drink without opening the app.
-- **Light & dark themes** (dark is the flagship), editable daily goal and bottle size, launch-at-startup, and a system-tray presence.
+- **Light & dark themes** (dark is the flagship), a **Low power mode** (fewer animations, no GPU acceleration), editable daily goal and bottle size, launch-at-startup, and a system-tray presence.
 - Runs fully offline; data lives in a local JSON file and fonts are bundled at build time.
 
 ## Screenshots
@@ -63,11 +66,15 @@ and no administrator rights are required.
 
 ```
 src/
-  main.js              Electron main process — windows, tray, reminders, IPC, widget
+  main.js              Electron main process — windows, tray, IPC, widget, export
+  reminders.js         Event-aligned reminder scheduler (pure timing, unit-tested)
+  report.js            Report assembly — CSV / JSON / printable-HTML builders
   preload.js           Secure contextBridge API
   store.js             JSON persistence (userData/waterline.json)
   renderer/            Main window UI (index.html, styles.css, renderer.js)
+    pace.js            Hydration-debt / pace math (pure, unit-tested)
     widget.html/.css/.js   Pinned desktop widget
+  *.test.js            node:test unit tests (run with `npm test`)
 build/
   make-icons.js        Zero-dependency water-drop icon / .ico generator
   fetch-fonts.js       Downloads and bundles the woff2 fonts

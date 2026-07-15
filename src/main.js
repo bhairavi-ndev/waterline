@@ -7,17 +7,32 @@ const {
   Notification,
   Tray,
   Menu,
+  dialog,
   nativeImage,
   nativeTheme,
   powerMonitor,
   screen,
 } = require('electron');
 const path = require('path');
+const fs = require('fs');
 const { Store, dateKey } = require('./store');
+const { createReminderScheduler } = require('./reminders');
+const report = require('./report');
 
 const APP_ID = 'com.kaamil.waterline';
 const APP_NAME = 'Waterline';
 const ASSETS = path.join(__dirname, '..', 'assets');
+
+// Low-power mode's GPU switch must be honored BEFORE the app is ready
+// (`disableHardwareAcceleration` is only valid pre-ready), so read the saved
+// settings file directly here rather than waiting for the Store.
+try {
+  const udBase = process.env.WATERLINE_USERDATA || app.getPath('userData');
+  const saved = JSON.parse(fs.readFileSync(path.join(udBase, 'waterline.json'), 'utf8'));
+  if (saved && saved.settings && saved.settings.lowPowerMode) app.disableHardwareAcceleration();
+} catch (_) {
+  /* no saved settings yet -> default (GPU on) */
+}
 
 let mainWindow = null;
 let widgetWindow = null;
@@ -25,10 +40,8 @@ let widgetSaveTimer = null;
 let widgetDrag = null; // { dx, dy } offset from cursor to window origin while dragging
 let tray = null;
 let store = null;
-let reminderTimer = null;
+let scheduler = null;
 
-let nudgeAnchor = Date.now(); // interval is measured from here (last drink / last nudge)
-let reminderIdx = 0;
 let lastDayKey = dateKey();
 let celebratedDayKey = null; // guards the once-a-day goal toast
 let pausedDayKey = null; // 'Pause reminders today' from the tray
@@ -124,6 +137,10 @@ function createWindow() {
         await mainWindow.webContents.executeJavaScript("document.querySelector('[data-tab=settings]').click()");
         await wait(500);
         await shot('settings');
+        // scroll to the new Low-power + Data controls at the bottom of Settings
+        await mainWindow.webContents.executeJavaScript("document.querySelector('.set-foot').scrollIntoView({ block: 'end' })");
+        await wait(300);
+        await shot('settings-bottom');
         // custom-amount popover opens (regression guard)
         await mainWindow.webContents.executeJavaScript("document.querySelector('[data-tab=today]').click()");
         await wait(400);
@@ -134,6 +151,19 @@ function createWindow() {
         await mainWindow.webContents.executeJavaScript("document.getElementById('addFull').click()");
         await wait(1300);
         await shot('afterlog');
+        // day editor: backfill 250 ml to yesterday via the jump-to-date picker
+        const yKey = (() => {
+          const d = new Date(); d.setDate(d.getDate() - 1);
+          const p = (n) => String(n).padStart(2, '0');
+          return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+        })();
+        await mainWindow.webContents.executeJavaScript("document.querySelector('[data-tab=history]').click()");
+        await wait(400);
+        await mainWindow.webContents.executeJavaScript(`(() => { const d = document.getElementById('jumpDate'); d.value = '${yKey}'; d.dispatchEvent(new Event('change')); })()`);
+        await wait(500);
+        await mainWindow.webContents.executeJavaScript("(() => { const m = document.getElementById('editMl'); m.value = '250'; document.getElementById('editAdd').click(); })()");
+        await wait(600);
+        await shot('editor');
       } catch (e) {
         console.log('[shot-error]', String(e));
       }
@@ -229,7 +259,9 @@ function createWidget() {
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: true,
-      backgroundThrottling: false,
+      // Let Chromium idle the wave animation while the widget is occluded behind
+      // active windows — it only needs to paint when the desktop is visible.
+      backgroundThrottling: true,
     },
   });
 
@@ -300,7 +332,7 @@ function trayIcon() {
 function logFromTray(ml, kind) {
   const prev = store.getToday().totalMl;
   const day = store.addWater(ml, kind);
-  nudgeAnchor = Date.now();
+  if (scheduler) scheduler.noteActivity();
   maybeCelebrate(prev, day);
   refreshRenderer();
   updateTrayTooltip(day);
@@ -324,6 +356,7 @@ function buildTrayMenu() {
       click: () => {
         pausedDayKey = isPausedToday() ? null : dateKey();
         rebuildTray();
+        if (scheduler) scheduler.reschedule();
       },
     },
     { type: 'separator' },
@@ -357,23 +390,11 @@ function createTray() {
 
 // ---------------------------------------------------------------------------
 // Reminders
+//
+// Timing lives in ./reminders (createReminderScheduler): the loop wakes only at
+// the next meaningful moment (a nudge, quiet-hours end, or midnight rollover)
+// rather than polling every 30s. This file supplies the side effects.
 // ---------------------------------------------------------------------------
-function parseHM(str) {
-  const [h, m] = String(str || '0:0').split(':').map((n) => parseInt(n, 10) || 0);
-  return h * 60 + m;
-}
-
-function inQuietHours(settings, now = new Date()) {
-  const q = settings.quietHours;
-  if (!q || !q.enabled) return false;
-  const cur = now.getHours() * 60 + now.getMinutes();
-  const start = parseHM(q.start);
-  const end = parseHM(q.end);
-  if (start === end) return false;
-  if (start < end) return cur >= start && cur < end;
-  return cur >= start || cur < end; // wraps past midnight
-}
-
 function checkDayRollover() {
   const today = dateKey();
   if (today !== lastDayKey) {
@@ -387,7 +408,7 @@ function checkDayRollover() {
   return false;
 }
 
-function reminderCopy(day, s) {
+function reminderCopy(day, s, idx) {
   const remaining = Math.max(0, day.goalMl - day.totalMl);
   const bottles = Math.max(1, Math.ceil(remaining / Math.max(1, s.bottleMl)));
   const total = day.totalMl.toLocaleString('en');
@@ -399,31 +420,22 @@ function reminderCopy(day, s) {
     { title: 'Water break', body: `It's been a while since your last drink. A half bottle takes you to ${pctAfterHalf}%.` },
     { title: 'Your bottle misses you', body: `${total} ml down, ${rem} to go. Keep it moving.` },
   ];
-  return variants[reminderIdx % variants.length];
+  return variants[idx % variants.length];
 }
 
-function reminderTick() {
-  checkDayRollover();
-
-  const s = store.getSettings();
-  if (!s.remindersEnabled || isPausedToday()) return;
-  if (inQuietHours(s)) return;
-
-  const day = store.getToday();
-  if (day.totalMl >= day.goalMl) return; // goal met, relax
-
-  const now = Date.now();
-  const intervalMs = Math.max(5, s.reminderIntervalMin) * 60 * 1000;
-  if (now - nudgeAnchor < intervalMs) return;
-
-  if (!Notification.isSupported()) return;
-  const copy = reminderCopy(day, s);
-  reminderIdx++;
-  nudgeAnchor = now;
-
-  const n = new Notification({ ...copy, icon: path.join(ASSETS, 'icon.png'), silent: false });
-  n.on('click', () => showWindow(true));
-  n.show();
+function buildScheduler() {
+  return createReminderScheduler({
+    getSettings: () => store.getSettings(),
+    getToday: () => store.getToday(),
+    isPaused: isPausedToday,
+    onWake: checkDayRollover,
+    fireNudge: (day, s, idx) => {
+      if (!Notification.isSupported()) return;
+      const n = new Notification({ ...reminderCopy(day, s, idx), icon: path.join(ASSETS, 'icon.png'), silent: false });
+      n.on('click', () => showWindow(true));
+      n.show();
+    },
+  });
 }
 
 function maybeCelebrate(prevTotal, day) {
@@ -441,12 +453,6 @@ function maybeCelebrate(prevTotal, day) {
       n.show();
     }
   }
-}
-
-function startReminderLoop() {
-  nudgeAnchor = Date.now();
-  if (reminderTimer) clearInterval(reminderTimer);
-  reminderTimer = setInterval(reminderTick, 30 * 1000);
 }
 
 // ---------------------------------------------------------------------------
@@ -479,14 +485,19 @@ function registerIpc() {
     paused: isPausedToday(),
   }));
 
+  // Today's logs drive reminders/celebration/tray; edits to a *past* day only
+  // persist and refresh history — they never touch the reminder loop.
   ipcMain.handle('water:add', (e, payload) => {
-    const ml = typeof payload === 'object' && payload ? payload.ml : payload;
-    const kind = typeof payload === 'object' && payload ? payload.kind : 'custom';
-    const prev = store.getToday().totalMl;
-    const day = store.addWater(ml, kind);
-    nudgeAnchor = Date.now();
-    maybeCelebrate(prev, day);
-    updateTrayTooltip(day);
+    const p = payload && typeof payload === 'object' ? payload : { ml: payload, kind: 'custom' };
+    const key = p.dateKey || dateKey();
+    const isToday = key === dateKey();
+    const prev = isToday ? store.getToday().totalMl : 0;
+    const day = store.addWater(p.ml, p.kind, { dateKey: key, ts: p.ts });
+    if (isToday) {
+      if (scheduler) scheduler.noteActivity();
+      maybeCelebrate(prev, day);
+      updateTrayTooltip(day);
+    }
     refreshOthers(e.sender); // keep the other window (main <-> widget) in sync
     return day;
   });
@@ -498,12 +509,24 @@ function registerIpc() {
     return day;
   });
 
-  ipcMain.handle('water:remove', (e, id) => {
-    const day = store.removeEntry(id);
-    updateTrayTooltip(day);
+  ipcMain.handle('water:remove', (e, arg) => {
+    const id = arg && typeof arg === 'object' ? arg.id : arg;
+    const key = (arg && typeof arg === 'object' && arg.dateKey) || dateKey();
+    const day = store.removeEntry(id, key);
+    if (key === dateKey()) updateTrayTooltip(day);
     refreshOthers(e.sender);
     return day;
   });
+
+  ipcMain.handle('entry:edit', (e, { id, patch, dateKey: key }) => {
+    const k = key || dateKey();
+    const day = store.editEntry(id, patch || {}, k);
+    if (k === dateKey()) updateTrayTooltip(day);
+    refreshOthers(e.sender);
+    return day;
+  });
+
+  ipcMain.handle('day:get', (_e, key) => store.getDay(key || dateKey()));
 
   ipcMain.handle('app:show', () => showWindow(true));
 
@@ -544,7 +567,9 @@ function registerIpc() {
       app.setLoginItemSettings({ openAtLogin: !!settings.launchOnStartup, args: ['--opened-at-login'] });
     }
     if (partial && ('remindersEnabled' in partial || 'reminderIntervalMin' in partial)) {
-      nudgeAnchor = Date.now();
+      if (scheduler) scheduler.noteActivity(); // reset the interval anchor + re-arm
+    } else if (partial && 'quietHours' in partial) {
+      if (scheduler) scheduler.reschedule(); // quiet-window edges moved
     }
     if (partial && 'widgetEnabled' in partial) {
       setWidgetEnabled(settings.widgetEnabled);
@@ -558,6 +583,68 @@ function registerIpc() {
   });
 
   ipcMain.handle('history:get', (_e, nDays) => store.getHistory(nDays || 30));
+
+  ipcMain.handle('export:run', (e, payload) => runExport(e, payload || {}));
+}
+
+// ---------------------------------------------------------------------------
+// Export (CSV / JSON / printable PDF)
+// ---------------------------------------------------------------------------
+function rangeStartKey(range, state, toKey) {
+  if (range === 'all') return report.earliestKey(state);
+  const n = range === '7' ? 6 : 29;
+  const [y, m, d] = toKey.split('-').map(Number);
+  return report.keyOf(new Date(y, m - 1, d - n));
+}
+function rangeLabel(range) {
+  return range === 'all' ? 'All time' : range === '7' ? 'Last 7 days' : 'Last 30 days';
+}
+function exportFileMeta(format, toKey) {
+  if (format === 'csv') return { defaultPath: `waterline-${toKey}.csv`, filters: [{ name: 'CSV', extensions: ['csv'] }] };
+  if (format === 'json') return { defaultPath: `waterline-backup-${toKey}.json`, filters: [{ name: 'JSON', extensions: ['json'] }] };
+  return { defaultPath: `waterline-report-${toKey}.pdf`, filters: [{ name: 'PDF', extensions: ['pdf'] }] };
+}
+
+/** Render report HTML to PDF via a hidden window + printToPDF. */
+async function renderPdf(html) {
+  const tmp = path.join(app.getPath('temp'), `waterline-report-${Date.now()}.html`);
+  fs.writeFileSync(tmp, html, 'utf8');
+  const win = new BrowserWindow({ show: false, webPreferences: { sandbox: true, contextIsolation: true } });
+  try {
+    await win.loadFile(tmp);
+    return await win.webContents.printToPDF({ printBackground: true });
+  } finally {
+    win.destroy();
+    try { fs.unlinkSync(tmp); } catch (_) { /* best effort */ }
+  }
+}
+
+async function runExport(e, { format = 'pdf', range = 'all' }) {
+  const state = store.getState();
+  const toKey = dateKey();
+  const fromKey = rangeStartKey(range, state, toKey);
+  const meta = exportFileMeta(format, toKey);
+  const host = BrowserWindow.fromWebContents(e.sender) || mainWindow;
+  const { canceled, filePath } = await dialog.showSaveDialog(host, {
+    title: 'Export Waterline data',
+    defaultPath: meta.defaultPath,
+    filters: meta.filters,
+  });
+  if (canceled || !filePath) return { ok: false, canceled: true };
+  try {
+    if (format === 'csv') {
+      fs.writeFileSync(filePath, report.toCSV(report.collectRange(state, fromKey, toKey).days), 'utf8');
+    } else if (format === 'json') {
+      fs.writeFileSync(filePath, report.toJSON(state), 'utf8');
+    } else {
+      const { days, stats } = report.collectRange(state, fromKey, toKey);
+      const html = report.toHTML({ days, stats, rangeLabel: rangeLabel(range), generatedAt: new Date().toLocaleString() });
+      fs.writeFileSync(filePath, await renderPdf(html));
+    }
+    return { ok: true, filePath };
+  } catch (err) {
+    return { ok: false, error: String((err && err.message) || err) };
+  }
 }
 
 function broadcastTheme() {
@@ -588,7 +675,8 @@ if (!gotLock) {
     registerIpc();
     createWindow();
     createTray();
-    startReminderLoop();
+    scheduler = buildScheduler();
+    scheduler.start();
     if (store.getSettings().widgetEnabled) createWidget();
 
     nativeTheme.on('updated', () => {
@@ -598,7 +686,7 @@ if (!gotLock) {
 
     powerMonitor.on('resume', () => {
       checkDayRollover();
-      reminderTick();
+      if (scheduler) scheduler.reschedule(); // recompute after the clock jumped
     });
 
     app.on('activate', () => {

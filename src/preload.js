@@ -8,11 +8,14 @@ const { contextBridge, ipcRenderer } = require('electron');
  */
 contextBridge.exposeInMainWorld('hydrate', {
   getState: () => ipcRenderer.invoke('app:getState'),
-  addWater: (ml, kind) => ipcRenderer.invoke('water:add', { ml, kind }),
+  addWater: (ml, kind, opts = {}) => ipcRenderer.invoke('water:add', { ml, kind, dateKey: opts.dateKey, ts: opts.ts }),
   undoLast: () => ipcRenderer.invoke('water:undo'),
-  removeEntry: (id) => ipcRenderer.invoke('water:remove', id),
+  removeEntry: (id, dateKey) => ipcRenderer.invoke('water:remove', { id, dateKey }),
+  editEntry: (id, patch, dateKey) => ipcRenderer.invoke('entry:edit', { id, patch, dateKey }),
+  getDay: (dateKey) => ipcRenderer.invoke('day:get', dateKey),
   updateSettings: (partial) => ipcRenderer.invoke('settings:update', partial),
   getHistory: (nDays) => ipcRenderer.invoke('history:get', nDays),
+  exportReport: (format, range) => ipcRenderer.invoke('export:run', { format, range }),
 
   // Widget-only controls (no-ops from the main window).
   openApp: () => ipcRenderer.invoke('app:show'),

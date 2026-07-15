@@ -87,8 +87,23 @@
             <span class="chip" id="chipPct">0% · 2,750 ml to go</span>
             <span class="chip" id="chipBottles">~4 bottles left</span>
           </div>
+          <p class="pace-status" id="paceStatus" aria-live="polite" hidden>
+            <span class="pace-main" id="paceMain"></span>
+            <span class="pace-sub" id="paceSub"></span>
+          </p>
           <p class="encourage" id="encourage">Nothing logged yet. First sip of the day?</p>
         </div>
+      </div>
+
+      <div class="card pace-card" id="paceCard" hidden>
+        <div class="pace-card-head">
+          <span class="eyebrow">Pace today</span>
+          <span class="pace-legend">
+            <span class="pace-legend-item pl-expected">Expected</span>
+            <span class="pace-legend-item pl-actual">You</span>
+          </span>
+        </div>
+        <div class="pace-host" id="paceHost"></div>
       </div>
 
       <div class="quick-add">
@@ -154,6 +169,30 @@
       <div class="card chart-card">
         <div id="chartHost" class="chart-host"></div>
       </div>
+
+      <div class="hist-tools">
+        <label class="hist-jump" for="jumpDate">Log or edit a day</label>
+        <input type="date" id="jumpDate" class="date-input" aria-label="Pick a day to log or edit" />
+      </div>
+
+      <!-- Day editor (opens when a day is picked or a history row is clicked) -->
+      <div class="card day-editor" id="dayEditor" hidden>
+        <div class="day-editor-head">
+          <span class="day-editor-title" id="dayEditorTitle">—</span>
+          <button class="day-editor-close" id="dayEditorClose" title="Close" aria-label="Close editor">×</button>
+        </div>
+        <ul class="edit-list" id="editList"></ul>
+        <div class="edit-empty" id="editEmpty" hidden>Nothing logged this day yet.</div>
+        <div class="edit-add">
+          <input type="time" id="editTime" class="time" aria-label="New entry time" />
+          <span class="edit-add-ml">
+            <input type="number" id="editMl" inputmode="numeric" min="1" max="3000" step="10" placeholder="250" aria-label="New entry amount, millilitres" />
+            <span>ml</span>
+          </span>
+          <button class="btn btn-primary btn-sm" id="editAdd">Add</button>
+        </div>
+      </div>
+
       <ul id="dayList" class="day-list"></ul>
       <div id="histEmpty" class="hist-empty" hidden>History fills up as you drink. Check back tomorrow.</div>
     </section>
@@ -236,8 +275,32 @@
           <div class="set-label">Keep running in tray when closed</div>
           <button class="switch" id="swTray" role="switch" aria-checked="true" aria-label="Keep running in tray when closed"><span class="switch-thumb"></span></button>
         </div>
+        <div class="set-row">
+          <div class="set-label">Low power mode</div>
+          <button class="switch" id="swLowPower" role="switch" aria-checked="false" aria-label="Low power mode"><span class="switch-thumb"></span></button>
+        </div>
+        <p class="set-caption">Fewer animations and no GPU acceleration. Restart to fully apply.</p>
       </div>
-      <div class="set-foot">Waterline · v1.0</div>
+
+      <div class="card set-card">
+        <div class="eyebrow">Data</div>
+        <div class="set-row">
+          <div class="set-label">Range</div>
+          <select class="select" id="exportRange" aria-label="Export range">
+            <option value="all">All time</option>
+            <option value="30">Last 30 days</option>
+            <option value="7">Last 7 days</option>
+          </select>
+        </div>
+        <div class="export-actions">
+          <button class="btn btn-tonal btn-sm" id="exportPdf">Report (PDF)</button>
+          <button class="btn btn-tonal btn-sm" id="exportCsv">CSV</button>
+          <button class="btn btn-tonal btn-sm" id="exportJson">JSON backup</button>
+        </div>
+        <p class="set-caption">Export your hydration data to share, print, or back up.</p>
+      </div>
+
+      <div class="set-foot">Waterline · v1.1</div>
     </section>
   </main>
 
@@ -250,6 +313,7 @@
   <!-- Chart tooltip -->
   <div id="chartTip" class="chart-tip" hidden></div>
 
+  <script src="pace.js"></script>
   <script src="renderer.js"></script>
 </body>
 </html>
