@@ -276,7 +276,9 @@ button { font-family: inherit; color: inherit; cursor: pointer; border: none; ba
 .hour-cell.has-water {
   background: color-mix(in srgb, var(--accent) calc(var(--fill) * 100%), var(--surface-sunken));
 }
-.hour-cell.is-sleep { opacity: 0.4; }
+/* Dimming marks un-scored *absence* during sleep — a drink you actually took
+   at 07:20 still shows at full strength. */
+.hour-cell.is-sleep:not(.has-water) { opacity: 0.4; }
 /* :not(.has-water) so a backfilled later-today entry still shows its water. */
 .hour-cell.is-future:not(.has-water) { background: color-mix(in srgb, var(--surface-sunken) 45%, transparent); }
 .hour-cell.is-now { box-shadow: inset 0 0 0 1.5px var(--accent); }
