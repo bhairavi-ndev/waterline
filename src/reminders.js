@@ -93,17 +93,37 @@ function createReminderScheduler(deps) {
   const {
     getSettings,
     getToday,
+    getLastDrinkMs = () => null,
     isPaused = () => false,
     onWake = () => {},
     fireNudge,
     now = () => Date.now(),
     setTimer = setTimeout,
     clearTimer = clearTimeout,
+    startGraceMs = 30 * 1000,
   } = deps;
 
   let nudgeAnchor = now();
   let reminderIdx = 0;
   let timer = null;
+
+  /**
+   * Anchor the nudge to the last actual drink so a gap survives an app
+   * restart — otherwise relaunching hands you a fresh interval and the app
+   * forgets you haven't had water in hours. An already-overdue gap is pulled
+   * forward only as far as `startGraceMs`, so opening the app never fires a
+   * notification in your face.
+   */
+  function anchorToLastDrink() {
+    const t = now();
+    const last = getLastDrinkMs();
+    if (last == null) {
+      nudgeAnchor = t;
+      return;
+    }
+    const earliest = t - intervalMsOf(getSettings()) + startGraceMs;
+    nudgeAnchor = Math.max(last, earliest);
+  }
 
   function reschedule() {
     if (timer) clearTimer(timer);
@@ -143,9 +163,12 @@ function createReminderScheduler(deps) {
   }
 
   return {
-    start() { nudgeAnchor = now(); reschedule(); },
+    start() { anchorToLastDrink(); reschedule(); },
     reschedule,
+    /** A drink just happened — the gap restarts from now. */
     noteActivity() { nudgeAnchor = now(); reschedule(); },
+    /** Settings moved; recompute from the last drink without forgiving the gap. */
+    reanchor() { anchorToLastDrink(); reschedule(); },
     stop() { if (timer) clearTimer(timer); timer = null; },
   };
 }

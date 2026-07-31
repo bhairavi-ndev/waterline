@@ -250,24 +250,44 @@ button { font-family: inherit; color: inherit; cursor: pointer; border: none; ba
 .pace-status.is-ahead .pace-main,
 .pace-status.is-ontrack .pace-main { color: var(--success); }
 
-.pace-card { padding: 14px 14px 10px; margin-bottom: 14px; }
-.pace-card-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
-.pace-card-head .eyebrow { margin-bottom: 0; }
-.pace-legend { display: inline-flex; gap: 12px; font-size: 11px; color: var(--text-3); }
-.pace-legend-item { display: inline-flex; align-items: center; gap: 5px; }
-.pace-legend-item::before { content: ''; width: 12px; height: 0; border-top-width: 2px; border-top-style: solid; }
-.pl-expected::before { border-top-style: dashed; border-top-color: var(--success); }
-.pl-actual::before { border-top-color: var(--accent); }
-.pace-host { width: 100%; height: 96px; }
-.pace-host svg { width: 100%; height: 100%; display: block; }
+/* ---- rhythm card (hour strip + gap readouts) ---- */
+.rhythm-card { padding: 14px 14px 12px; margin-bottom: 14px; }
+.rhythm-head { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; margin-bottom: 10px; }
+.rhythm-head .eyebrow { margin-bottom: 0; }
 
-.pace-axis { stroke: var(--border); stroke-width: 1; }
-.pace-expected { stroke: var(--success); stroke-width: 1.5; fill: none; }
-.pace-actual { stroke: var(--accent); stroke-width: 2; fill: none; stroke-linejoin: round; stroke-linecap: round; }
-.pace-now { fill: var(--accent); }
-.pace-gap { stroke-width: 1.5; opacity: 0.85; }
-.pace-gap.is-behind { stroke: var(--warning); }
-.pace-gap.is-ahead { stroke: var(--success); }
+.rhythm-since { display: inline-flex; align-items: baseline; gap: 6px; font-size: 11px; color: var(--text-3); }
+.rhythm-since-val {
+  font-family: var(--font-mono); font-size: 13px; font-weight: 600;
+  color: var(--text-2); transition: color 0.3s var(--ease);
+}
+/* Only the *live* gap is ever coloured — past stretches stay neutral, because
+   they're history you can't act on. Warm/cool, never green/red. */
+.rhythm-since[data-level='due'] .rhythm-since-val { color: var(--text); }
+.rhythm-since[data-level='over'] .rhythm-since-val { color: var(--warning); }
+
+.hour-strip { display: flex; gap: 2px; height: 30px; }
+.hour-cell {
+  flex: 1 1 0; min-width: 0; border-radius: 3px;
+  background: var(--surface-sunken);
+  transition: background 0.35s var(--ease);
+}
+/* --fill saturates at Gap.SATURATE_ML, so a chugged bottle can't outshine a
+   normal glass. Spreading the day out is the only way to fill the strip. */
+.hour-cell.has-water {
+  background: color-mix(in srgb, var(--accent) calc(var(--fill) * 100%), var(--surface-sunken));
+}
+.hour-cell.is-sleep { opacity: 0.4; }
+/* :not(.has-water) so a backfilled later-today entry still shows its water. */
+.hour-cell.is-future:not(.has-water) { background: color-mix(in srgb, var(--surface-sunken) 45%, transparent); }
+.hour-cell.is-now { box-shadow: inset 0 0 0 1.5px var(--accent); }
+
+.rhythm-ticks {
+  display: flex; justify-content: space-between; margin-top: 6px;
+  font-family: var(--font-mono); font-size: 10px; color: var(--text-3);
+}
+.rhythm-foot { margin-top: 8px; font-size: 12px; color: var(--text-3); }
+.rhythm-foot:empty { display: none; }
+.rhythm-hint { color: var(--text-2); }
 
 /* ---- quick add ---- */
 .quick-add { display: flex; flex-direction: column; gap: 10px; margin-bottom: 24px; }
@@ -487,7 +507,9 @@ button { font-family: inherit; color: inherit; cursor: pointer; border: none; ba
 .edit-add {
   margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border);
 }
-.edit-add .btn-sm { flex: none; }
+/* .btn-primary is width:100% for the big quick-add button; in this row the
+   Add button must size to its label instead, or it overflows the card. */
+.edit-add .btn-primary { flex: none; width: auto; }
 
 /* ---- settings ---- */
 .set-card { padding: 6px 16px 16px; margin-bottom: 14px; }

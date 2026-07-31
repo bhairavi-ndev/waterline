@@ -50,8 +50,13 @@
     paceStatus: $('paceStatus'),
     paceMain: $('paceMain'),
     paceSub: $('paceSub'),
-    paceCard: $('paceCard'),
-    paceHost: $('paceHost'),
+    rhythmCard: $('rhythmCard'),
+    rhythmSince: $('rhythmSince'),
+    rhythmSinceVal: $('rhythmSinceVal'),
+    rhythmSinceLbl: $('rhythmSinceLbl'),
+    hourStrip: $('hourStrip'),
+    rhythmFoot: $('rhythmFoot'),
+    rhythmHint: $('rhythmHint'),
     encourage: $('encourage'),
     fullLbl: $('fullLbl'),
     halfLbl: $('halfLbl'),
@@ -368,7 +373,7 @@
     const st = Pace.paceStatus({ nowMin, goal, actualMl: actualByNow, win });
 
     el.paceStatus.hidden = false;
-    el.paceCard.hidden = false;
+    el.rhythmCard.hidden = false;
     el.paceStatus.classList.remove('is-behind', 'is-ahead', 'is-ontrack');
     if (st.state === 'behind') {
       el.paceStatus.classList.add('is-behind');
@@ -384,69 +389,56 @@
       el.paceSub.textContent = st.expectedMl > 0 ? `expected ~${fmt(st.expectedMl)} ml by now` : 'the day is just getting started';
     }
 
-    drawPaceChart(win, goal, nowMin, entries);
+    renderRhythm(win);
   }
 
-  function drawPaceChart(win, goal, nowMin, entries) {
-    const host = el.paceHost;
-    host.textContent = '';
-    const W = host.clientWidth || 340;
-    const H = 96;
-    const padT = 10, padB = 16, padL = 6, padR = 6;
-    const plotW = W - padL - padR;
-    const plotH = H - padT - padB;
-    const x0 = win.startMin, x1 = win.endMin;
-    const nowClamped = Math.max(x0, nowMin); // don't draw left of wake
-    const spanX = Math.max(1, x1 - x0);
-    const maxY = goal * 1.05 || 1;
-    const X = (min) => padL + ((clamp(min, x0, x1) - x0) / spanX) * plotW;
-    const Y = (ml) => padT + plotH - (clamp(ml, 0, maxY) / maxY) * plotH;
+  /**
+   * The hour strip + gap readouts.
+   *
+   * Cell brightness saturates at Gap.SATURATE_ML, so chugging a whole bottle
+   * lights one cell no brighter than a normal glass would — a well-spread day
+   * is the only way to fill the strip. Only the *live* gap is ever coloured;
+   * stretches that already passed stay neutral, because they're history you
+   * can't act on. See docs/research/04-design-decisions.md.
+   */
+  function renderRhythm(win) {
+    const nowMs = Date.now();
+    const nowHour = new Date(nowMs).getHours();
+    const entries = today.entries;
+    const hourly = Gap.hourlyMl(entries);
+    const sinceMs = Gap.msSinceLast(entries, nowMs);
 
-    const s = svg('svg', { viewBox: `0 0 ${W} ${H}` });
-
-    // baseline
-    s.appendChild(svg('line', { x1: padL, y1: Y(0), x2: W - padR, y2: Y(0), class: 'pace-axis' }));
-
-    // expected line: (wake, 0) -> (bed, goal)
-    s.appendChild(svg('line', {
-      x1: X(x0), y1: Y(0), x2: X(x1), y2: Y(goal),
-      class: 'pace-expected', 'stroke-dasharray': '4 3',
-    }));
-
-    // actual cumulative step-line, only up to now (a monotonic "so far" line)
-    let cum = 0;
-    const pts = [{ min: x0, ml: 0 }];
-    for (const e of entries) {
-      const m = entryMin(e);
-      if (m > nowMin) break; // entries sorted asc; ignore future-timed ones
-      pts.push({ min: m, ml: cum });
-      cum += e.ml;
-      pts.push({ min: m, ml: cum });
+    const strip = el.hourStrip;
+    strip.textContent = '';
+    for (let h = 0; h < 24; h++) {
+      const cell = document.createElement('span');
+      cell.className = 'hour-cell';
+      const min = h * 60;
+      if (min < win.startMin || min >= win.endMin) cell.classList.add('is-sleep');
+      if (h > nowHour) cell.classList.add('is-future');
+      if (h === nowHour) cell.classList.add('is-now');
+      const ml = hourly[h];
+      if (ml > 0) cell.classList.add('has-water');
+      cell.style.setProperty('--fill', Gap.cellFill(ml).toFixed(3));
+      cell.title = ml > 0 ? `${hourLabel(min)} · ${fmt(ml)} ml` : `${hourLabel(min)} · nothing`;
+      strip.appendChild(cell);
     }
-    pts.push({ min: nowClamped, ml: cum }); // extend flat to now
+    strip.setAttribute('aria-label', stripSummary(hourly, nowHour));
 
-    // gap connector at "now": actual -> expected, colored by state
-    const expNow = Pace.expectedMl(nowMin, goal, win);
-    s.appendChild(svg('line', {
-      x1: X(nowClamped), y1: Y(cum), x2: X(nowClamped), y2: Y(expNow),
-      class: 'pace-gap ' + (cum < expNow ? 'is-behind' : 'is-ahead'),
-    }));
+    el.rhythmSinceVal.textContent = Gap.formatGap(sinceMs);
+    el.rhythmSince.dataset.level = Gap.gapLevel(sinceMs);
+    el.rhythmSinceLbl.textContent = sinceMs == null ? 'nothing logged yet' : 'since last drink';
 
-    let d = '';
-    pts.forEach((p, i) => { d += (i === 0 ? 'M' : 'L') + X(p.min).toFixed(1) + ',' + Y(p.ml).toFixed(1) + ' '; });
-    s.appendChild(svg('path', { d: d.trim(), class: 'pace-actual', fill: 'none' }));
+    el.rhythmFoot.textContent = Gap.longestGapNote(
+      entries, Gap.longestGapMs(entries, { nowMs, win })
+    );
+    el.rhythmHint.textContent = Gap.intakeNote(Gap.trailingMl(entries, nowMs));
+  }
 
-    // now dot
-    s.appendChild(svg('circle', { cx: X(nowClamped), cy: Y(cum), r: 3.2, class: 'pace-now' }));
-
-    // x-axis endpoints
-    const lx = svg('text', { x: padL, y: H - 4, 'text-anchor': 'start', class: 'chart-num', 'font-size': 9 });
-    lx.textContent = hourLabel(x0);
-    const rx = svg('text', { x: W - padR, y: H - 4, 'text-anchor': 'end', class: 'chart-num', 'font-size': 9 });
-    rx.textContent = hourLabel(x1);
-    s.append(lx, rx);
-
-    host.appendChild(s);
+  function stripSummary(hourly, nowHour) {
+    const hours = hourly.filter((ml) => ml > 0).length;
+    const total = hourly.reduce((a, b) => a + b, 0);
+    return `${fmt(total)} ml across ${hours} of the ${nowHour + 1} hours so far today`;
   }
 
   function todayViewActive() {

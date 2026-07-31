@@ -425,10 +425,21 @@ function reminderCopy(day, s, idx) {
   return variants[idx % variants.length];
 }
 
+/** Timestamp (ms) of today's most recent entry, or null when none. */
+function lastDrinkMs(day) {
+  let max = null;
+  for (const entry of (day && day.entries) || []) {
+    const t = new Date(entry.ts).getTime();
+    if (Number.isFinite(t) && (max === null || t > max)) max = t;
+  }
+  return max;
+}
+
 function buildScheduler() {
   return createReminderScheduler({
     getSettings: () => store.getSettings(),
     getToday: () => store.getToday(),
+    getLastDrinkMs: () => lastDrinkMs(store.getToday()),
     isPaused: isPausedToday,
     onWake: checkDayRollover,
     fireNudge: (day, s, idx) => {
@@ -569,7 +580,7 @@ function registerIpc() {
       app.setLoginItemSettings({ openAtLogin: !!settings.launchOnStartup, args: ['--opened-at-login'] });
     }
     if (partial && ('remindersEnabled' in partial || 'reminderIntervalMin' in partial)) {
-      if (scheduler) scheduler.noteActivity(); // reset the interval anchor + re-arm
+      if (scheduler) scheduler.reanchor(); // re-arm from the last drink, not from now
     } else if (partial && 'quietHours' in partial) {
       if (scheduler) scheduler.reschedule(); // quiet-window edges moved
     }
