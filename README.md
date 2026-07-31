@@ -8,7 +8,7 @@ Waterline is styled like laboratory glassware — a graduated bottle that litera
 
 ## Download
 
-**[⬇ Download Waterline for Windows](https://github.com/bhairavi-ndev/waterline/releases/latest/download/Waterline-Setup-1.3.0.exe)** — or browse [all releases](https://github.com/bhairavi-ndev/waterline/releases/latest).
+**[⬇ Download Waterline for Windows](https://github.com/bhairavi-ndev/waterline/releases/latest/download/Waterline-Setup-1.3.1.exe)** — or browse [all releases](https://github.com/bhairavi-ndev/waterline/releases).
 
 A per-user installer: no administrator rights needed, and you choose the install
 folder and which shortcuts to create. Windows 10/11, 64-bit.

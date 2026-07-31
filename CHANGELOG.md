@@ -3,6 +3,18 @@
 All notable changes to Waterline are documented here.
 This project follows [Semantic Versioning](https://semver.org/).
 
+## [1.3.1] — 2026-07-31
+
+**Fixed**
+
+- **Sleep-hour dimming hid water you'd actually drunk.** Hour cells outside your
+  waking window were faded to 40% — including cells that had a drink in them, so
+  a 07:20 glass logged before an 08:00 wake time rendered faint, as if it hadn't
+  counted. The dimming is there to mark un-scored *absence* during sleep, not to
+  hide real water, so it now applies only to empty cells.
+
+No other changes from 1.3.0.
+
 ## [1.3.0] — 2026-07-31
 
 ### Rhythm — Waterline now tracks *when* you drink, not just how much
