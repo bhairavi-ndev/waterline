@@ -137,8 +137,10 @@ function makeHarness(opts) {
   const sched = createReminderScheduler({
     getSettings: opts.getSettings,
     getToday: opts.getToday,
+    getLastDrinkMs: opts.getLastDrinkMs || (() => null),
     isPaused: opts.isPaused || (() => false),
     onWake: opts.onWake || (() => {}),
+    startGraceMs: opts.startGraceMs,
     fireNudge: (day, s, idx) => fired.push({ day, s, idx }),
     now: () => nowMs,
     setTimer: (fn, delay) => { scheduled = { fn, delay }; return 1; },
@@ -180,6 +182,63 @@ test('scheduler.noteActivity pushes the next nudge out from the new anchor', () 
   h.setNow(NOON + 30 * 60 * 1000);
   h.sched.noteActivity();
   assert.equal(h.scheduled.delay, HOUR);
+});
+
+// ---- gap anchoring (survives a restart) -----------------------------------
+const MIN = 60 * 1000;
+
+test('scheduler.start anchors to the last drink, not to app start', () => {
+  // Drank 40 min ago then restarted the app: the nudge is due in 20 min, and
+  // restarting must not hand you a fresh full hour.
+  const day = { totalMl: 100, goalMl: 2000 };
+  const h = makeHarness({
+    now: NOON,
+    getSettings: () => DAY_SETTINGS,
+    getToday: () => day,
+    getLastDrinkMs: () => NOON - 40 * MIN,
+  });
+  h.sched.start();
+  assert.equal(h.scheduled.delay, 20 * MIN);
+});
+
+test('scheduler.start falls back to now when nothing has been logged today', () => {
+  const day = { totalMl: 0, goalMl: 2000 };
+  const h = makeHarness({
+    now: NOON,
+    getSettings: () => DAY_SETTINGS,
+    getToday: () => day,
+    getLastDrinkMs: () => null,
+  });
+  h.sched.start();
+  assert.equal(h.scheduled.delay, HOUR);
+});
+
+test('scheduler.start on an already-overdue gap waits a grace, not zero', () => {
+  // Opening the app after a 5h gap should not fire a notification instantly.
+  const day = { totalMl: 100, goalMl: 2000 };
+  const h = makeHarness({
+    now: NOON,
+    getSettings: () => DAY_SETTINGS,
+    getToday: () => day,
+    getLastDrinkMs: () => NOON - 5 * HOUR,
+    startGraceMs: 30 * 1000,
+  });
+  h.sched.start();
+  assert.equal(h.scheduled.delay, 30 * 1000);
+});
+
+test('scheduler.reanchor recomputes from the last drink without counting as activity', () => {
+  // Changing the reminder interval must not silently forgive a running gap.
+  const day = { totalMl: 100, goalMl: 2000 };
+  const h = makeHarness({
+    now: NOON,
+    getSettings: () => DAY_SETTINGS,
+    getToday: () => day,
+    getLastDrinkMs: () => NOON - 45 * MIN,
+  });
+  h.sched.start();
+  h.sched.reanchor();
+  assert.equal(h.scheduled.delay, 15 * MIN);
 });
 
 test('scheduler only watches for rollover once the goal is met', () => {

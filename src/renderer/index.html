@@ -95,15 +95,21 @@
         </div>
       </div>
 
-      <div class="card pace-card" id="paceCard" hidden>
-        <div class="pace-card-head">
-          <span class="eyebrow">Pace today</span>
-          <span class="pace-legend">
-            <span class="pace-legend-item pl-expected">Expected</span>
-            <span class="pace-legend-item pl-actual">You</span>
+      <!-- Rhythm: when you drank, and how long the quiet stretches were. -->
+      <div class="card rhythm-card" id="rhythmCard" hidden>
+        <div class="rhythm-head">
+          <span class="eyebrow">Rhythm today</span>
+          <span class="rhythm-since" id="rhythmSince" data-level="fresh">
+            <span class="rhythm-since-val" id="rhythmSinceVal">—</span>
+            <span class="rhythm-since-lbl" id="rhythmSinceLbl">since last drink</span>
           </span>
         </div>
-        <div class="pace-host" id="paceHost"></div>
+        <div class="hour-strip" id="hourStrip" role="img" aria-label="Hourly intake"></div>
+        <div class="rhythm-ticks" aria-hidden="true">
+          <span>12a</span><span>6a</span><span>12p</span><span>6p</span><span>12a</span>
+        </div>
+        <p class="rhythm-foot" id="rhythmFoot"></p>
+        <p class="rhythm-foot rhythm-hint" id="rhythmHint"></p>
       </div>
 
       <div class="quick-add">
@@ -321,6 +327,7 @@
   <div id="chartTip" class="chart-tip" hidden></div>
 
   <script src="pace.js"></script>
+  <script src="gap.js"></script>
   <script src="renderer.js"></script>
 </body>
 </html>

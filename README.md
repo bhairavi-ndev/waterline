@@ -6,11 +6,23 @@ Waterline is styled like laboratory glassware — a graduated bottle that litera
 
 ![Waterline — Today](docs/screenshots/today.png)
 
+## Download
+
+**[⬇ Download Waterline for Windows](https://github.com/bhairavi-ndev/waterline/releases/latest/download/Waterline-Setup-1.3.0.exe)** — or browse [all releases](https://github.com/bhairavi-ndev/waterline/releases/latest).
+
+A per-user installer: no administrator rights needed, and you choose the install
+folder and which shortcuts to create. Windows 10/11, 64-bit.
+
+> SmartScreen will likely warn you on first run — the installer isn't
+> code-signed (a certificate costs more than this project does). Click
+> **More info → Run anyway**, or build it yourself with `npm run dist`.
+
 ## Features
 
 - **Graduated fill-bottle** hero that fills in real time, with etched tick marks at every bottle and your daily goal.
 - **One-tap logging** — full bottle, half, or a custom amount — with an undo toast and a timestamped daily log.
-- **Hydration debt & pace** — see how far ahead or behind you are *right now* ("Behind by 320 ml — expected ~1,550 by now"), plus a "Pace today" chart of your expected vs. actual cumulative intake, so you catch a slow day before you feel it.
+- **Rhythm, not just totals** — a 24-cell strip showing *when* you drank, plus "time since last drink" and your longest quiet stretch. Cell brightness deliberately maxes out at 250 ml, so chugging a bottle lights one cell no brighter than a glass would: spreading the day out is the only way to fill the strip. ([Why — the research](docs/research/).)
+- **Hydration debt & pace** — see how far ahead or behind you are *right now* ("Behind by 320 ml — expected ~1,550 by now"), so you catch a slow day before you feel it.
 - **Daily history** — a 7 / 30-day bar chart with your goal line, current streak, daily average, and goal-hit badges.
 - **Log or edit any past day** — click a day in History (or pick any date) to add, adjust, or remove timed entries and backfill what you missed.
 - **Export a report** — a printable PDF summary, a CSV for spreadsheets, or a full JSON backup, over all time or the last 7 / 30 days.
@@ -73,6 +85,7 @@ src/
   store.js             JSON persistence (userData/waterline.json)
   renderer/            Main window UI (index.html, styles.css, renderer.js)
     pace.js            Hydration-debt / pace math (pure, unit-tested)
+    gap.js             Gap / distribution math — hour strip, drink gaps (pure, unit-tested)
     widget.html/.css/.js   Pinned desktop widget
   *.test.js            node:test unit tests (run with `npm test`)
 build/
@@ -80,7 +93,25 @@ build/
   fetch-fonts.js       Downloads and bundles the woff2 fonts
 electron-builder.yml   Installer configuration
 build/installer.nsh    Custom NSIS "choose shortcuts" page
+docs/research/         Evidence base for the hydration model (see below)
 ```
+
+## Why the app works the way it does
+
+Waterline's hydration model is documented, with sources, in
+[`docs/research/`](docs/research/) — a physiology literature scan, two UX
+surveys, and a design-decision record. Every threshold in the code is traced to
+either evidence, a labelled extrapolation, or an admitted invention.
+
+The short version: a daily total can't tell 800 ml chugged at noon apart from
+800 ml sipped across the day, and those aren't equivalent — the same volume
+loses ~20 percentage points of hydration efficiency when drunk as a bolus
+([Jones 2010](https://pubmed.ncbi.nlm.nih.gov/20479487/)). Hence the hour strip,
+and hence the deliberate cap on how bright one hour can get.
+
+Equally documented is what the app **won't** claim: no study shows that evenly
+spreading intake improves a health outcome at a matched daily total, so
+Waterline doesn't say it does.
 
 ## Tech
 
